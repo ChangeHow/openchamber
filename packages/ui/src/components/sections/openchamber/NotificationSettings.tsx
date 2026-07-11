@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getClientPlatform } from '@/lib/platform';
 import { useI18n } from '@/lib/i18n';
+import { usePermissionStore } from '@/stores/permissionStore';
 
 const DEFAULT_NOTIFICATION_TEMPLATES = {
   completion: {
@@ -68,6 +69,20 @@ export const NotificationSettings: React.FC = () => {
   const [pushSupported, setPushSupported] = React.useState(false);
   const [pushSubscribed, setPushSubscribed] = React.useState(false);
   const [pushBusy, setPushBusy] = React.useState(false);
+  const [backgroundAutoAcceptBusy, setBackgroundAutoAcceptBusy] = React.useState(false);
+  const backgroundAutoAcceptEnabled = usePermissionStore(state => state.backgroundAutoAcceptEnabled);
+  const setBackgroundAutoAccept = usePermissionStore(state => state.setBackgroundAutoAccept);
+
+  const handleBackgroundAutoAccept = async (enabled: boolean) => {
+    setBackgroundAutoAcceptBusy(true);
+    try {
+      await setBackgroundAutoAccept(enabled);
+    } catch {
+      toast.error(t('settings.notifications.page.backgroundAutoAccept.failed'));
+    } finally {
+      setBackgroundAutoAcceptBusy(false);
+    }
+  };
 
   React.useEffect(() => {
     if (!isBrowser) {
@@ -459,6 +474,34 @@ export const NotificationSettings: React.FC = () => {
           </div>
 
           <section className="px-2 pb-2 pt-0 space-y-0.5">
+            {!isVSCode && (
+              <div
+                className="group flex cursor-pointer items-center gap-2 py-1.5"
+                role="button"
+                tabIndex={backgroundAutoAcceptBusy ? -1 : 0}
+                aria-pressed={backgroundAutoAcceptEnabled}
+                aria-disabled={backgroundAutoAcceptBusy}
+                onClick={() => {
+                  if (!backgroundAutoAcceptBusy) void handleBackgroundAutoAccept(!backgroundAutoAcceptEnabled);
+                }}
+                onKeyDown={(event) => {
+                  if (!backgroundAutoAcceptBusy && (event.key === ' ' || event.key === 'Enter')) {
+                    event.preventDefault();
+                    void handleBackgroundAutoAccept(!backgroundAutoAcceptEnabled);
+                  }
+                }}
+              >
+                <span onClick={(event) => event.stopPropagation()}>
+                  <Checkbox
+                    checked={backgroundAutoAcceptEnabled}
+                    disabled={backgroundAutoAcceptBusy}
+                    onChange={(checked) => void handleBackgroundAutoAccept(checked)}
+                    ariaLabel={t('settings.notifications.page.backgroundAutoAccept.aria')}
+                  />
+                </span>
+                <span className="typography-ui-label text-foreground">{t('settings.notifications.page.backgroundAutoAccept.label')}</span>
+              </div>
+            )}
             <div
               className="group flex cursor-pointer items-center gap-2 py-1.5"
               role="button"

@@ -8,6 +8,8 @@ let pendingQuestionsResponse: QuestionRequest[] = []
 let pendingPermissionsResponse: PermissionRequest[] = []
 let pendingQuestionsShouldThrow = false
 let pendingPermissionsShouldThrow = false
+let daemonOwnsAutoAccept = false
+const permissionResponses: string[] = []
 
 mock.module("@/lib/opencode/client", () => ({
   opencodeClient: {
@@ -29,8 +31,14 @@ mock.module("@/lib/opencode/client", () => ({
 
 mock.module("@/stores/permissionStore", () => ({
   usePermissionStore: {
-    getState: () => ({ isSessionAutoAccepting: () => false }),
+    getState: () => ({ shouldClientAutoAccept: () => !daemonOwnsAutoAccept }),
   },
+}))
+
+mock.module("@/sync/session-actions", () => ({
+  respondToPermission: mock(async (_sessionId: string, permissionId: string) => {
+    permissionResponses.push(permissionId)
+  }),
 }))
 
 mock.module("@/stores/useConfigStore", () => ({
@@ -91,6 +99,8 @@ describe("resyncBlockingRequestsForDirectory", () => {
     pendingPermissionsResponse = []
     pendingQuestionsShouldThrow = false
     pendingPermissionsShouldThrow = false
+    daemonOwnsAutoAccept = true
+    permissionResponses.length = 0
   })
 
   test("calls listPendingQuestions and listPendingPermissions exactly once for the directory", async () => {
@@ -116,6 +126,16 @@ describe("resyncBlockingRequestsForDirectory", () => {
     expect(store.getState().question["ses_a"]).toHaveLength(1)
     expect(store.getState().question["ses_a"]?.[0]?.id).toBe("que_1")
     expect(store.getState().permission["ses_a"]).toHaveLength(1)
+    expect(store.getState().permission["ses_a"]?.[0]?.id).toBe("perm_1")
+  })
+
+  test("leaves daemon-owned pending permissions for server processing", async () => {
+    const store = createDirectoryStore({})
+    pendingPermissionsResponse = [buildPermission()]
+
+    await resyncBlockingRequestsForDirectory("/repo", store)
+
+    expect(permissionResponses).toEqual([])
     expect(store.getState().permission["ses_a"]?.[0]?.id).toBe("perm_1")
   })
 

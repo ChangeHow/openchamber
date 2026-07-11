@@ -14,11 +14,15 @@ import { runtimeFetch } from "@/lib/runtime-fetch";
 
 interface PermissionState {
     autoAccept: PermissionAutoAcceptMap;
+    backgroundAutoAcceptEnabled: boolean;
 }
 
 interface PermissionActions {
     isSessionAutoAccepting: (sessionId: string) => boolean;
+    shouldClientAutoAccept: (sessionId: string) => boolean;
     setSessionAutoAccept: (sessionId: string, enabled: boolean) => Promise<void>;
+    setBackgroundAutoAccept: (enabled: boolean) => Promise<void>;
+    hydrateBackgroundAutoAccept: () => Promise<void>;
 }
 
 type PermissionStore = PermissionState & PermissionActions;
@@ -203,11 +207,41 @@ const autoRespondsPermissionBySession = (
 
 const getStorage = () => createDeferredSafeJSONStorage();
 
+type BackgroundAutoAcceptState = { enabled: boolean; sessions: PermissionAutoAcceptMap };
+let backgroundUpdateQueue = Promise.resolve();
+
+const serializeBackgroundUpdate = <T,>(update: () => Promise<T>): Promise<T> => {
+    const result = backgroundUpdateQueue.then(update, update);
+    backgroundUpdateQueue = result.then(() => undefined, () => undefined);
+    return result;
+};
+
+const putBackgroundAutoAccept = async (state: BackgroundAutoAcceptState): Promise<BackgroundAutoAcceptState> => {
+    const response = await runtimeFetch('/api/openchamber/background-auto-accept', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+    });
+    if (!response.ok) throw new Error('Failed to update background auto accept');
+    return response.json() as Promise<BackgroundAutoAcceptState>;
+};
+
+const mirrorNotificationAutoAccept = (sessionIds: Iterable<string>, enabled: boolean): void => {
+    for (const sessionId of sessionIds) {
+        void runtimeFetch('/api/notifications/auto-accept', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, enabled }),
+        }).catch(() => undefined);
+    }
+};
+
 export const usePermissionStore = create<PermissionStore>()(
     devtools(
         persist(
             (set, get) => ({
                 autoAccept: {},
+                backgroundAutoAcceptEnabled: false,
 
                 isSessionAutoAccepting: (sessionId: string) => {
                     if (!sessionId) {
@@ -218,12 +252,50 @@ export const usePermissionStore = create<PermissionStore>()(
                     return autoRespondsPermissionBySession(get().autoAccept, sessions, sessionId);
                 },
 
+                shouldClientAutoAccept: (sessionId: string) => {
+                    return !get().backgroundAutoAcceptEnabled && get().isSessionAutoAccepting(sessionId);
+                },
+
+                hydrateBackgroundAutoAccept: () => serializeBackgroundUpdate(async () => {
+                    const response = await runtimeFetch('/api/openchamber/background-auto-accept');
+                    if (!response.ok) throw new Error('Failed to load background auto accept');
+                    const state = await response.json() as BackgroundAutoAcceptState;
+                    set(state.enabled
+                        ? { backgroundAutoAcceptEnabled: true, autoAccept: state.sessions }
+                        : { backgroundAutoAcceptEnabled: false });
+                    if (!state.enabled) {
+                        mirrorNotificationAutoAccept(
+                            Object.entries(get().autoAccept).filter(([, enabled]) => enabled).map(([sessionId]) => sessionId),
+                            true,
+                        );
+                    }
+                }),
+
+                setBackgroundAutoAccept: (enabled: boolean) => serializeBackgroundUpdate(async () => {
+                    const sessions = get().autoAccept;
+                    await putBackgroundAutoAccept({ enabled, sessions });
+                    set({ backgroundAutoAcceptEnabled: enabled });
+                    if (!enabled) {
+                        await Promise.all(Object.entries(sessions)
+                            .filter(([, autoAccept]) => autoAccept)
+                            .map(([sessionId]) => get().setSessionAutoAccept(sessionId, true)));
+                    }
+                }),
+
                 setSessionAutoAccept: async (sessionId: string, enabled: boolean) => {
                     if (!sessionId) {
                         return;
                     }
 
                     const sessions = getAllSyncSessions();
+
+                    if (get().backgroundAutoAcceptEnabled) {
+                        return serializeBackgroundUpdate(async () => {
+                            const autoAccept = { ...get().autoAccept, [sessionId]: enabled };
+                            await putBackgroundAutoAccept({ enabled: true, sessions: autoAccept });
+                            set({ autoAccept });
+                        });
+                    }
 
                     set((state) => {
                         const autoAccept = { ...state.autoAccept };
@@ -232,18 +304,7 @@ export const usePermissionStore = create<PermissionStore>()(
                     });
 
                     const sessionScope = resolveSessionScope(sessionId, sessions);
-
-                    // Mirror inherited state to the server so it can suppress
-                    // permission notifications before the client auto-response
-                    // round-trip. Send known descendants too; server-side
-                    // ancestry lookup can lag OpenCode session indexing.
-                    for (const scopedSessionId of sessionScope) {
-                        void runtimeFetch('/api/notifications/auto-accept', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ sessionId: scopedSessionId, enabled }),
-                        }).catch(() => { /* best-effort */ });
-                    }
+                    mirrorNotificationAutoAccept(sessionScope, enabled);
 
                     if (!enabled) {
                         return;
@@ -307,7 +368,10 @@ export const usePermissionStore = create<PermissionStore>()(
             {
                 name: "permission-store",
                 storage: getStorage(),
-                partialize: (state) => ({ autoAccept: state.autoAccept }),
+                partialize: (state) => ({
+                    autoAccept: state.autoAccept,
+                    backgroundAutoAcceptEnabled: state.backgroundAutoAcceptEnabled,
+                }),
                 merge: (persistedState, currentState) => {
                     const merged = {
                         ...currentState,
@@ -352,18 +416,7 @@ export const usePermissionStore = create<PermissionStore>()(
                 },
                 onRehydrateStorage: () => (state) => {
                     if (!state) return;
-                    // Re-broadcast auto-accept state to the server after
-                    // rehydration so server-side notification suppression
-                    // survives page reloads / server restarts.
-                    for (const [sid, enabled] of Object.entries(state.autoAccept || {})) {
-                        if (enabled === true) {
-                            void runtimeFetch('/api/notifications/auto-accept', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ sessionId: sid, enabled: true }),
-                            }).catch(() => { /* best-effort */ });
-                        }
-                    }
+                    void state.hydrateBackgroundAutoAccept().catch(() => undefined);
                 },
             }
         ),

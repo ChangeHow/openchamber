@@ -1175,7 +1175,7 @@ export async function resyncBlockingRequestsForDirectory(
     }
 
     const permissionStore = usePermissionStore.getState()
-    const autoAcceptingSessionIds = Object.keys(grouped).filter((sessionId) => permissionStore.isSessionAutoAccepting(sessionId))
+    const autoAcceptingSessionIds = Object.keys(grouped).filter((sessionId) => permissionStore.shouldClientAutoAccept(sessionId))
 
     if (autoAcceptingSessionIds.length > 0) {
       const acceptedIdsBySession = new Map<string, Set<string>>()
@@ -1428,7 +1428,7 @@ function handleEvent(
   if (payload.type === "permission.asked") {
     const permission = payload.properties as PermissionRequest
     const permissionStore = usePermissionStore.getState()
-    if (permissionStore.isSessionAutoAccepting(permission.sessionID)) {
+    if (permissionStore.shouldClientAutoAccept(permission.sessionID)) {
       updateRoutingIndexFromEvent(routingIndex, resolvedDirectory, payload)
       void sessionActions.respondToPermission(permission.sessionID, permission.id, "once").catch(() => undefined)
       return

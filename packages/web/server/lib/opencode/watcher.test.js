@@ -43,6 +43,183 @@ describe('createOpenCodeWatcherRuntime', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps server-side permission auto-accept disabled by default', async () => {
+    const replyCalls = [];
+    let emitEvent;
+    const watcher = createOpenCodeWatcherRuntime({
+      waitForOpenCodePort: async () => {},
+      buildOpenCodeUrl: (path) => `http://127.0.0.1:4096${path}`,
+      getOpenCodeAuthHeaders: () => ({}),
+      globalEventHub: {
+        start() {},
+        subscribeEvent(subscriber) {
+          emitEvent = subscriber;
+          return () => {};
+        },
+        subscribeStatus() {
+          return () => {};
+        },
+      },
+      onPayload() {},
+      fetchImpl: async (...args) => {
+        replyCalls.push(args);
+        return new Response('true', { status: 200 });
+      },
+    });
+
+    await watcher.start();
+    await emitEvent({
+      directory: '/tmp/project',
+      payload: {
+        type: 'permission.asked',
+        properties: { id: 'perm_1', sessionID: 'ses_1', permission: 'bash' },
+      },
+    });
+
+    expect(replyCalls).toHaveLength(0);
+  });
+
+  it('auto-accepts enabled sessions when server-side handling is enabled', async () => {
+    let emitEvent;
+    const replyCalls = [];
+    const globalEventHub = {
+      start() {},
+      subscribeEvent(subscriber) {
+        emitEvent = subscriber;
+        return () => {};
+      },
+      subscribeStatus() {
+        return () => {};
+      },
+    };
+    const watcher = createOpenCodeWatcherRuntime({
+      waitForOpenCodePort: async () => {},
+      buildOpenCodeUrl: (path) => `http://127.0.0.1:4096${path}`,
+      getOpenCodeAuthHeaders: () => ({ Authorization: 'Bearer test-token' }),
+      globalEventHub,
+      onPayload() {},
+      fetchImpl: async (url, options) => {
+        replyCalls.push({ url, options });
+        return new Response('true', { status: 200, headers: { 'Content-Type': 'application/json' } });
+      },
+    });
+
+    await watcher.start();
+    watcher.setPermissionAutoAcceptState({ enabled: true, sessions: { ses_1: true } });
+    await emitEvent({
+      directory: '/tmp/project',
+      payload: {
+        type: 'permission.asked',
+        properties: {
+          id: 'perm_1',
+          sessionID: 'ses_1',
+          permission: 'bash',
+        },
+      },
+    });
+
+    expect(replyCalls).toHaveLength(1);
+    expect(replyCalls[0]).toMatchObject({
+      url: 'http://127.0.0.1:4096/permission/perm_1/reply?directory=%2Ftmp%2Fproject',
+      options: {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer test-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reply: 'once' }),
+      },
+    });
+  });
+
+  it('inherits parent auto-accept while respecting an explicit child false', async () => {
+    let emitEvent;
+    const replyCalls = [];
+    const watcher = createOpenCodeWatcherRuntime({
+      waitForOpenCodePort: async () => {},
+      buildOpenCodeUrl: (path) => `http://127.0.0.1:4096${path}`,
+      getOpenCodeAuthHeaders: () => ({}),
+      globalEventHub: {
+        start() {},
+        subscribeEvent(subscriber) { emitEvent = subscriber; return () => {}; },
+        subscribeStatus() { return () => {}; },
+      },
+      onPayload() {},
+      fetchImpl: async (...args) => {
+        replyCalls.push(args);
+        return new Response('true', { status: 200 });
+      },
+    });
+
+    await watcher.start();
+    watcher.setPermissionAutoAcceptState({ enabled: true, sessions: { parent: true, blocked: false } });
+    await emitEvent({ directory: '/repo', payload: { type: 'session.created', properties: { info: { id: 'child', parentID: 'parent' } } } });
+    await emitEvent({ directory: '/repo', payload: { type: 'session.updated', properties: { info: { id: 'blocked', parentID: 'parent' } } } });
+    await emitEvent({ directory: '/repo', payload: { type: 'permission.asked', properties: { id: 'p1', sessionID: 'child' } } });
+    await emitEvent({ directory: '/repo', payload: { type: 'permission.asked', properties: { id: 'p2', sessionID: 'blocked' } } });
+
+    expect(replyCalls).toHaveLength(1);
+    expect(replyCalls[0][0]).toContain('/permission/p1/reply?directory=%2Frepo');
+  });
+
+  it('resolves an existing subagent parent after daemon restart', async () => {
+    let emitEvent;
+    const replyCalls = [];
+    const watcher = createOpenCodeWatcherRuntime({
+      waitForOpenCodePort: async () => {},
+      buildOpenCodeUrl: (path) => `http://127.0.0.1:4096${path}`,
+      getOpenCodeAuthHeaders: () => ({}),
+      globalEventHub: {
+        start() {},
+        subscribeEvent(subscriber) { emitEvent = subscriber; return () => {}; },
+        subscribeStatus() { return () => {}; },
+      },
+      onPayload() {},
+      fetchImpl: async (url) => {
+        if (String(url).includes('/session/existing-child')) {
+          return Response.json({ id: 'existing-child', parentID: 'parent' });
+        }
+        replyCalls.push(String(url));
+        return new Response('true', { status: 200 });
+      },
+    });
+
+    await watcher.start();
+    watcher.setPermissionAutoAcceptState({ enabled: true, sessions: { parent: true } });
+    await emitEvent({ directory: '/repo', payload: { type: 'permission.asked', properties: { id: 'p1', sessionID: 'existing-child' } } });
+
+    expect(replyCalls).toEqual(['http://127.0.0.1:4096/permission/p1/reply?directory=%2Frepo']);
+  });
+
+  it('auto-accepts through the standalone SSE fallback', async () => {
+    const fetchCalls = [];
+    const watcher = createOpenCodeWatcherRuntime({
+      waitForOpenCodePort: async () => {},
+      buildOpenCodeUrl: (path) => `http://127.0.0.1:4096${path}`,
+      getOpenCodeAuthHeaders: () => ({}),
+      onPayload() {},
+      fetchImpl: async (url, options) => {
+        fetchCalls.push(String(url));
+        if (String(url).includes('/global/event')) {
+          return createSseResponse({
+            signal: options.signal,
+            holdOpen: true,
+            blocks: ['data: {"directory":"/repo","payload":{"type":"permission.asked","properties":{"id":"p1","sessionID":"ses_1"}}}\n\n'],
+          });
+        }
+        return new Response('true', { status: 200 });
+      },
+    });
+
+    watcher.setPermissionAutoAcceptState({ enabled: true, sessions: { ses_1: true } });
+    await watcher.start();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    watcher.stop();
+
+    expect(fetchCalls).toContain('http://127.0.0.1:4096/permission/p1/reply?directory=%2Frepo');
+  });
+
   it('waits for OpenCode readiness and forwards unwrapped global SSE payloads', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const payloads = [];

@@ -58,6 +58,18 @@ const createTestHelpersWithRealSanitizers = () => {
 };
 
 describe('settings helpers', () => {
+  it('sanitizes only complete background auto-accept state', () => {
+    const helpers = createTestHelpers();
+    expect(helpers.sanitizeSettingsUpdate({
+      backgroundAutoAccept: { enabled: true, sessions: { parent: true, child: false } },
+    })).toEqual({
+      backgroundAutoAccept: { enabled: true, sessions: { parent: true, child: false } },
+    });
+    expect(helpers.sanitizeSettingsUpdate({
+      backgroundAutoAccept: { enabled: true },
+    })).toEqual({});
+  });
+
   it('accepts messageStreamTransport as a persisted shared setting', () => {
     const helpers = createTestHelpers();
 

@@ -14,6 +14,7 @@ import { registerPluginRoutes } from './plugin-routes.js';
 import { getNpmInfo, clearCache as clearNpmCache } from './npm-registry.js';
 import { parseNpmSpec, parsePathSpec, isExactSemver } from './plugin-spec.js';
 import { registerOpenCodeRoutes } from './routes.js';
+import { registerBackgroundAutoAcceptRoutes } from './background-auto-accept-routes.js';
 import { getProviderSources, removeProviderConfig } from './providers.js';
 import { getAgentSources, getAgentConfig, createAgent, updateAgent, deleteAgent } from './agents.js';
 import { getCommandSources, createCommand, updateCommand, deleteCommand } from './commands.js';
@@ -97,6 +98,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       scheduledTasksRuntime,
       getOpenChamberEventClients,
       writeSseEvent,
+      backgroundAutoAcceptRuntime,
     } = routeDependencies;
 
     registerSettingsUtilityRoutes(app, {
@@ -121,6 +123,11 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       refreshOpenCodeAfterConfigChange,
       buildOpenCodeUrl,
       getOpenCodeAuthHeaders,
+    });
+    registerBackgroundAutoAcceptRoutes(app, {
+      persistSettings,
+      getState: backgroundAutoAcceptRuntime.getPermissionAutoAcceptState,
+      setState: backgroundAutoAcceptRuntime.setPermissionAutoAcceptState,
     });
 
     registerProjectIconRoutes(app, {

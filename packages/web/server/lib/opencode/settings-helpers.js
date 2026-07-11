@@ -35,6 +35,7 @@ export const createSettingsHelpers = (dependencies) => {
       return null;
     }
     const result = {};
+
     for (const [rawKey, rawValue] of Object.entries(value)) {
       const key = typeof rawKey === 'string' ? rawKey.trim() : '';
       const combo = typeof rawValue === 'string' ? rawValue.trim() : '';
@@ -127,6 +128,22 @@ export const createSettingsHelpers = (dependencies) => {
 
     const candidate = payload;
     const result = {};
+
+    if (candidate.backgroundAutoAccept && typeof candidate.backgroundAutoAccept === 'object') {
+      const sessions = candidate.backgroundAutoAccept.sessions;
+      if (
+        typeof candidate.backgroundAutoAccept.enabled === 'boolean'
+        && sessions
+        && typeof sessions === 'object'
+        && !Array.isArray(sessions)
+        && Object.entries(sessions).every(([id, enabled]) => id.length > 0 && typeof enabled === 'boolean')
+      ) {
+        result.backgroundAutoAccept = {
+          enabled: candidate.backgroundAutoAccept.enabled,
+          sessions: { ...sessions },
+        };
+      }
+    }
 
     if (typeof candidate.themeId === 'string' && candidate.themeId.length > 0) {
       result.themeId = candidate.themeId;

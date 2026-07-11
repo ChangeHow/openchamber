@@ -716,6 +716,17 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
 
 const maybeSendPushForTrigger = (...args) => notificationTriggerRuntime.maybeSendPushForTrigger(...args);
 const setAutoAcceptSession = (...args) => notificationTriggerRuntime.setAutoAcceptSession(...args);
+let backgroundNotificationAutoAcceptSessions = new Set();
+const setBackgroundAutoAcceptState = (state) => {
+  openCodeWatcherRuntime.setPermissionAutoAcceptState(state);
+  for (const sessionId of backgroundNotificationAutoAcceptSessions) setAutoAcceptSession(sessionId, false);
+  backgroundNotificationAutoAcceptSessions = new Set(
+    state?.enabled === true
+      ? Object.entries(state.sessions ?? {}).filter(([, enabled]) => enabled === true).map(([sessionId]) => sessionId)
+      : [],
+  );
+  for (const sessionId of backgroundNotificationAutoAcceptSessions) setAutoAcceptSession(sessionId, true);
+};
 clearPendingPushBadge = () => notificationTriggerRuntime.clearPendingPushBadge();
 
 const sessionAssistRuntime = createSessionAssistRuntime({
@@ -1032,7 +1043,10 @@ const ensureGlobalWatcherStarted = async () => {
     return globalWatcherStartPromise;
   }
 
-  globalWatcherStartPromise = openCodeWatcherRuntime.start().catch((error) => {
+  globalWatcherStartPromise = readSettingsFromDiskMigrated().then((settings) => {
+    setBackgroundAutoAcceptState(settings?.backgroundAutoAccept);
+    return openCodeWatcherRuntime.start();
+  }).catch((error) => {
     globalWatcherStartPromise = null;
     throw error;
   });
@@ -1427,6 +1441,10 @@ async function main(options = {}) {
     scheduledTasksRuntime,
     getOpenChamberEventClients: () => uiOpenChamberEventClients,
     writeSseEvent,
+    backgroundAutoAcceptRuntime: {
+      getPermissionAutoAcceptState: openCodeWatcherRuntime.getPermissionAutoAcceptState,
+      setPermissionAutoAcceptState: setBackgroundAutoAcceptState,
+    },
   });
 
   const previewProxyRuntime = createPreviewProxyRuntime({
