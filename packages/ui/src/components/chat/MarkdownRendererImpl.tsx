@@ -25,8 +25,7 @@ import {
   attachMarkdownInteractions,
   applyMarkdownCodeBlockWrapState,
   decorateMarkdown,
-  scheduleMarkdownCodeLineNumberSync,
-  syncMarkdownCodeLineNumbers,
+  getMarkdownCodeText,
   type DecorateContext,
   type DecorateLabels,
   type MermaidControlOptions,
@@ -304,11 +303,14 @@ const wrapBlockCodePathTokens = (container: HTMLElement): void => {
     const textNodes: Text[] = [];
     let currentNode = walker.nextNode();
     while (currentNode) {
-      textNodes.push(currentNode as Text);
+      const textNode = currentNode as Text;
+      if (!textNode.parentElement?.closest('[data-md-code-line-number]')) {
+        textNodes.push(textNode);
+      }
       currentNode = walker.nextNode();
     }
 
-    const fullText = codeBlock.textContent ?? '';
+    const fullText = getMarkdownCodeText(codeBlock);
     if (!fullText.includes('.')) {
       codeBlock.setAttribute(CODE_BLOCK_PATH_SCANNED_ATTR, 'true');
       continue;
@@ -958,9 +960,6 @@ const useMorphdomMarkdown = ({
         refreshMermaidViewers();
       }
 
-      if (!ctx.deferCodeLineNumberSync) {
-        scheduleMarkdownCodeLineNumberSync(target);
-      }
     });
 
     return () => {
@@ -992,24 +991,6 @@ const useMorphdomMarkdown = ({
     applyMarkdownCodeBlockWrapState(target, ctx.codeBlockLineWrap, ctx.labels);
   }, [containerRef, ctx.codeBlockLineWrap, ctx.deferCodeLineNumberSync, ctx.labels]);
 
-  React.useEffect(() => {
-    const container = containerRef.current;
-    const target = container?.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
-    if (!target || typeof ResizeObserver === 'undefined') return;
-    let frame: number | null = null;
-    const observer = new ResizeObserver(() => {
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        frame = null;
-        syncMarkdownCodeLineNumbers(target);
-      });
-    });
-    observer.observe(target);
-    return () => {
-      observer.disconnect();
-      if (frame !== null) window.cancelAnimationFrame(frame);
-    };
-  }, [containerRef]);
 };
 
 const markdownContentClassName = (variant: MarkdownVariant): string =>
