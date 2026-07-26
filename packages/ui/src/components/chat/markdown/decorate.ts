@@ -3,6 +3,7 @@ import { getExternalFaviconUrl, isExternalHttpUrl, isLoopbackHttpUrl } from '@/l
 import { dropdownMenuItemClass, dropdownMenuPopupClass } from '@/components/ui/dropdown-menu.styles';
 import type { IconName } from '@/components/icon/icons';
 import { getMermaidViewerController } from './mermaidViewer';
+import { findTextPosition } from './textPosition';
 
 // ---------------------------------------------------------------------------
 // Shared decoration context
@@ -138,19 +139,6 @@ const collectTextNodes = (root: HTMLElement): Text[] => {
   return nodes;
 };
 
-const findTextPosition = (nodes: Text[], targetOffset: number): { node: Text; offset: number } | null => {
-  let offset = 0;
-  for (const node of nodes) {
-    const nextOffset = offset + node.data.length;
-    if (targetOffset <= nextOffset) {
-      return { node, offset: Math.max(0, targetOffset - offset) };
-    }
-    offset = nextOffset;
-  }
-  const last = nodes.at(-1);
-  return last ? { node: last, offset: last.data.length } : null;
-};
-
 export const syncMarkdownCodeLineNumbers = (root: HTMLElement): void => {
   const wrappers = root.querySelectorAll<HTMLElement>('[data-component="markdown-code"]');
   for (const wrapper of Array.from(wrappers)) {
@@ -174,8 +162,8 @@ export const syncMarkdownCodeLineNumbers = (root: HTMLElement): void => {
       const lineEl = numbers[index];
       if (!lineEl) continue;
 
-      const start = findTextPosition(textNodes, lineStart);
-      const end = findTextPosition(textNodes, lineEnd);
+      const start = findTextPosition(textNodes, lineStart, 'right');
+      const end = findTextPosition(textNodes, lineEnd, 'left');
       if (!start || !end || lineStart === lineEnd) {
         lineEl.style.height = `${lineHeight}px`;
         lineEl.style.lineHeight = `${lineHeight}px`;
