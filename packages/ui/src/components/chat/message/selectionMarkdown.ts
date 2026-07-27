@@ -6,6 +6,7 @@ type SelectionNode =
       className: string;
       href: string;
       component: string;
+      markdownLanguage: string;
       isCodeLines: boolean;
       isCodeLineNumber: boolean;
       children: SelectionNode[];
@@ -22,8 +23,13 @@ const normalizeLineBreaks = (value: string): string => value.replace(/\r\n?/g, '
 export const trimSelectionValue = (value: string): string => normalizeLineBreaks(value).trim();
 const textToMarkdownInline = (value: string): string => value.replace(/\s+/g, ' ').trim();
 
-const getCodeLanguage = (className: string): string => {
+const getCodeLanguageFromClassName = (className: string): string => {
   return (className.match(/language-([\w+#.-]+)/)?.[1] || '').trim();
+};
+
+const getBlockCodeLanguage = (code: HTMLElement): string => {
+  return code.closest('pre')?.getAttribute('data-md-lang')
+    || getCodeLanguageFromClassName(code.className);
 };
 
 const toSelectionNode = (node: Node): SelectionNode | null => {
@@ -41,6 +47,7 @@ const toSelectionNode = (node: Node): SelectionNode | null => {
     className: element.getAttribute('class') || '',
     href: element.getAttribute('href') || '',
     component: element.getAttribute('data-component') || '',
+    markdownLanguage: element.getAttribute('data-md-lang') || '',
     isCodeLines: element.hasAttribute('data-md-code-lines'),
     isCodeLineNumber: element.hasAttribute('data-md-code-line-number'),
     children: Array.from(element.childNodes)
@@ -138,7 +145,7 @@ const renderBlockMarkdownNode = (node: SelectionNode): string => {
       : findElement(node, (element) => element.tag === 'code');
     return formatCodeSelectionMarkdown(
       code ? getSelectionText(code) : getSelectionText(node),
-      getCodeLanguage(code?.className || ''),
+      node.markdownLanguage || getCodeLanguageFromClassName(code?.className || ''),
     );
   }
 
@@ -209,7 +216,7 @@ export const rangeToMarkdown = (range: Range, plainText: string): string => {
   if (startCode && startCode === endCode) {
     return formatCodeSelectionMarkdown(
       nodes.map((node) => getSelectionText(node)).join(''),
-      getCodeLanguage(startCode.className),
+      getBlockCodeLanguage(startCode),
     );
   }
 

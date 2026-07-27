@@ -15,6 +15,7 @@ type TestNode =
       className: string;
       href: string;
       component: string;
+      markdownLanguage: string;
       isCodeLines: boolean;
       isCodeLineNumber: boolean;
       children: TestNode[];
@@ -32,6 +33,7 @@ const element = (
   className: '',
   href: '',
   component: '',
+  markdownLanguage: '',
   isCodeLines: false,
   isCodeLineNumber: false,
   children,
@@ -50,8 +52,8 @@ const codeWrapper = (lines: string[], language = 'ts'): TestNode => element('div
       element('code', lines.flatMap((line, index) => [
         codeLine(index + 12, line),
         ...(index < lines.length - 1 ? [element('span', [text('\n')])] : []),
-      ]), { className: `language-${language}`, isCodeLines: true }),
-    ]),
+      ]), { isCodeLines: true }),
+    ], { markdownLanguage: language }),
   ]),
 ], { component: 'markdown-code' });
 
