@@ -20,6 +20,7 @@ type TestNode =
       children: TestNode[];
     };
 
+const multiline = (...lines: string[]): string => lines.join('\n');
 const text = (value: string): TestNode => ({ type: 'text', value });
 const element = (
   tag: string,
@@ -56,71 +57,121 @@ const codeWrapper = (lines: string[], language = 'ts'): TestNode => element('div
 
 describe('selectionNodesToMarkdown', () => {
   test('serializes a complete grid code block without its header or line numbers', () => {
-    expect(selectionNodesToMarkdown([codeWrapper(['range.cloneContents()', 'next()'])], '')).toBe(
-      '```ts\nrange.cloneContents()\nnext()\n```',
-    );
+    expect(selectionNodesToMarkdown([codeWrapper(['range.cloneContents()', 'next()'])], '')).toBe(multiline(
+      '```ts',
+      'range.cloneContents()',
+      'next()',
+      '```',
+    ));
   });
 
   test('preserves a partial code block selected after prose', () => {
     const nodes = [
       element('p', [
-        text('原生'),
+        text('Method:'),
         element('code', [text('Selection.toString()')]),
-        text('通常不会包含行号，但 Add to Chat 不直接使用它。'),
+        text('. Add to Chat uses a cloned range.'),
       ]),
-      element('p', [text('它还会执行：')]),
+      element('p', [text('It also runs:')]),
       codeWrapper(['range.cloneContents()']),
     ];
 
-    expect(selectionNodesToMarkdown(nodes, '')).toBe(
-      '原生`Selection.toString()`通常不会包含行号，但 Add to Chat 不直接使用它。\n\n它还会执行：\n\n```ts\nrange.cloneContents()\n```',
-    );
+    expect(selectionNodesToMarkdown(nodes, '')).toBe(multiline(
+      'Method:`Selection.toString()`. Add to Chat uses a cloned range.',
+      '',
+      'It also runs:',
+      '',
+      '```ts',
+      'range.cloneContents()',
+      '```',
+    ));
   });
 
   test('preserves a partial code block selected before prose', () => {
     expect(selectionNodesToMarkdown([
       codeWrapper(['range.cloneContents()']),
-      element('p', [text('后续说明')]),
-    ], '')).toBe('```ts\nrange.cloneContents()\n```\n\n后续说明');
+      element('p', [text('Following explanation')]),
+    ], '')).toBe(multiline(
+      '```ts',
+      'range.cloneContents()',
+      '```',
+      '',
+      'Following explanation',
+    ));
   });
 });
 
 describe('formatCodeSelectionMarkdown', () => {
   test('preserves indentation and blank lines', () => {
-    expect(formatCodeSelectionMarkdown('if (ready) {\n  run();\n\n  stop();\n}', 'ts')).toBe(
-      '```ts\nif (ready) {\n  run();\n\n  stop();\n}\n```',
-    );
+    expect(formatCodeSelectionMarkdown(multiline(
+      'if (ready) {',
+      '  run();',
+      '',
+      '  stop();',
+      '}',
+    ), 'ts')).toBe(multiline(
+      '```ts',
+      'if (ready) {',
+      '  run();',
+      '',
+      '  stop();',
+      '}',
+      '```',
+    ));
   });
 
   test('normalizes line endings without duplicating a trailing newline', () => {
-    expect(formatCodeSelectionMarkdown('first\r\nsecond\r\n', 'text')).toBe(
-      '```text\nfirst\nsecond\n```',
-    );
+    expect(formatCodeSelectionMarkdown('first\r\nsecond\r\n', 'text')).toBe(multiline(
+      '```text',
+      'first',
+      'second',
+      '```',
+    ));
   });
 
   test('uses a longer fence when selected code contains backtick fences', () => {
-    expect(formatCodeSelectionMarkdown('before\n```\nafter', 'md')).toBe(
-      '````md\nbefore\n```\nafter\n````',
-    );
+    expect(formatCodeSelectionMarkdown(multiline(
+      'before',
+      '```',
+      'after',
+    ), 'md')).toBe(multiline(
+      '````md',
+      'before',
+      '```',
+      'after',
+      '````',
+    ));
   });
 
   test('preserves punctuation in language identifiers', () => {
-    expect(selectionNodesToMarkdown([codeWrapper(['std::vector<int> values;'], 'c++')], '')).toBe(
-      '```c++\nstd::vector<int> values;\n```',
-    );
+    expect(selectionNodesToMarkdown([codeWrapper(['std::vector<int> values;'], 'c++')], '')).toBe(multiline(
+      '```c++',
+      'std::vector<int> values;',
+      '```',
+    ));
   });
 });
 
 describe('trimSelectionValue', () => {
   test('normalizes line endings before trimming the selection', () => {
-    expect(trimSelectionValue('  first\r\nsecond  ')).toBe('first\nsecond');
+    expect(trimSelectionValue('  first\r\nsecond  ')).toBe(multiline('first', 'second'));
   });
 });
 
 describe('wrapMarkdownSelectionForChat', () => {
   test('uses a longer outer fence when the selection contains fenced code', () => {
-    expect(wrapMarkdownSelectionForChat('```ts\nrun();\n```')).toBe(
-      '````md\n```ts\nrun();\n```\n````',
+    const selectedMarkdown = multiline(
+      '```ts',
+      'run();',
+      '```',
     );
+
+    expect(wrapMarkdownSelectionForChat(selectedMarkdown)).toBe(multiline(
+      '````md',
+      '```ts',
+      'run();',
+      '```',
+      '````',
+    ));
   });
 });
