@@ -16,6 +16,7 @@ type TestNode =
       href: string;
       component: string;
       markdownLanguage: string;
+      isMarkdownBlock: boolean;
       isCodeLines: boolean;
       isCodeLineNumber: boolean;
       children: TestNode[];
@@ -34,6 +35,7 @@ const element = (
   href: '',
   component: '',
   markdownLanguage: '',
+  isMarkdownBlock: false,
   isCodeLines: false,
   isCodeLineNumber: false,
   children,
@@ -44,6 +46,8 @@ const codeLine = (number: number, content: string): TestNode => element('span', 
   element('span', [text(String(number))], { isCodeLineNumber: true }),
   element('span', [text(content)]),
 ]);
+
+const markdownBlock = (children: TestNode[]): TestNode => element('div', children, { isMarkdownBlock: true });
 
 const codeWrapper = (lines: string[], language = 'ts'): TestNode => element('div', [
   element('div', [text(language)]),
@@ -67,25 +71,25 @@ describe('selectionNodesToMarkdown', () => {
     ));
   });
 
-  test('preserves a partial code block selected after prose', () => {
+  test('preserves a code block nested between production Markdown block wrappers', () => {
     const nodes = [
-      element('p', [
+      markdownBlock([element('p', [
         text('Method:'),
         element('code', [text('Selection.toString()')]),
         text('. Add to Chat uses a cloned range.'),
-      ]),
-      element('p', [text('It also runs:')]),
-      codeWrapper(['range.cloneContents()']),
+      ])]),
+      markdownBlock([codeWrapper(['range.cloneContents()'])]),
+      markdownBlock([element('p', [text('Following explanation')])]),
     ];
 
     expect(selectionNodesToMarkdown(nodes, '')).toBe(multiline(
       'Method:`Selection.toString()`. Add to Chat uses a cloned range.',
       '',
-      'It also runs:',
-      '',
       '```ts',
       'range.cloneContents()',
       '```',
+      '',
+      'Following explanation',
     ));
   });
 

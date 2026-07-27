@@ -7,6 +7,7 @@ type SelectionNode =
       href: string;
       component: string;
       markdownLanguage: string;
+      isMarkdownBlock: boolean;
       isCodeLines: boolean;
       isCodeLineNumber: boolean;
       children: SelectionNode[];
@@ -48,6 +49,7 @@ const toSelectionNode = (node: Node): SelectionNode | null => {
     href: element.getAttribute('href') || '',
     component: element.getAttribute('data-component') || '',
     markdownLanguage: element.getAttribute('data-md-lang') || '',
+    isMarkdownBlock: element.hasAttribute('data-md-block'),
     isCodeLines: element.hasAttribute('data-md-code-lines'),
     isCodeLineNumber: element.hasAttribute('data-md-code-line-number'),
     children: Array.from(element.childNodes)
@@ -134,6 +136,13 @@ const renderListMarkdown = (list: Extract<SelectionNode, { type: 'element' }>, o
 const renderBlockMarkdownNode = (node: SelectionNode): string => {
   if (node.type === 'text') return trimSelectionValue(node.value);
 
+  if (node.isMarkdownBlock) {
+    return node.children
+      .map((child) => renderBlockMarkdownNode(child))
+      .filter((child) => child.length > 0)
+      .join('\n\n');
+  }
+
   if (node.component === 'markdown-code') {
     const pre = findElement(node, (element) => element.tag === 'pre');
     return pre ? renderBlockMarkdownNode(pre) : '';
@@ -185,7 +194,7 @@ const renderBlockMarkdownNode = (node: SelectionNode): string => {
 
 const isInlineSelectionNode = (node: SelectionNode): boolean => {
   if (node.type === 'text') return true;
-  return !node.isCodeLines && node.component !== 'markdown-code' && !BLOCK_TAGS.has(node.tag);
+  return !node.isMarkdownBlock && !node.isCodeLines && node.component !== 'markdown-code' && !BLOCK_TAGS.has(node.tag);
 };
 
 export const selectionNodesToMarkdown = (nodes: SelectionNode[], plainText: string): string => {
