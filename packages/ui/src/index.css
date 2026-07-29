@@ -316,14 +316,16 @@ div[data-chat-input-footer="true"] {
   mask-image: linear-gradient(
     to bottom,
     transparent 0%,
-    #000 var(--scroll-shadow-size),
+    transparent var(--scroll-shadow-top-clear-size, 0px),
+    #000 var(--scroll-shadow-top-size, var(--scroll-shadow-size)),
     #000 calc(100% - var(--scroll-shadow-size)),
     transparent 100%
   );
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0%,
-    #000 var(--scroll-shadow-size),
+    transparent var(--scroll-shadow-top-clear-size, 0px),
+    #000 var(--scroll-shadow-top-size, var(--scroll-shadow-size)),
     #000 calc(100% - var(--scroll-shadow-size)),
     transparent 100%
   );
@@ -333,13 +335,15 @@ div[data-chat-input-footer="true"] {
   mask-image: linear-gradient(
     to bottom,
     transparent 0%,
-    #000 var(--scroll-shadow-size),
+    transparent var(--scroll-shadow-top-clear-size, 0px),
+    #000 var(--scroll-shadow-top-size, var(--scroll-shadow-size)),
     #000 100%
   );
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0%,
-    #000 var(--scroll-shadow-size),
+    transparent var(--scroll-shadow-top-clear-size, 0px),
+    #000 var(--scroll-shadow-top-size, var(--scroll-shadow-size)),
     #000 100%
   );
 }
