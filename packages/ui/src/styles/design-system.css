@@ -158,24 +158,6 @@
     background-color: var(--sidebar-stuck-bg) !important;
   }
 
-  :root.desktop-runtime[data-oc-vibrancy] .oc-sidebar-chrome {
-    position: relative;
-    z-index: 30;
-    background: var(--sidebar-stuck-bg);
-  }
-
-  :root.desktop-runtime[data-oc-vibrancy] .oc-sidebar-chrome::after,
-  :root.desktop-runtime[data-oc-vibrancy] .oc-zone-header-backing::after {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    left: 0;
-    height: 12px;
-    pointer-events: none;
-    content: '';
-    background: linear-gradient(to bottom, var(--sidebar-stuck-bg), transparent);
-  }
-
   .font-sans {
     font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif) !important;
   }

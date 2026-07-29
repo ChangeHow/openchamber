@@ -144,7 +144,7 @@ function SidebarProjectsListComponent(props: Props): React.ReactNode {
     // button) and holds it in place, which makes newly revealed sessions look
     // like they insert upward. With anchoring off, scrollTop stays put and new
     // rows appear below naturally.
-    <ScrollableOverlay ref={scrollContainerRef} useScrollShadow hideTopScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('oc-sidebar-scroller space-y-1.5 pb-1 pl-2.5 pr-2 [overflow-anchor:none]', props.mobileVariant ? '' : '')}>
+    <ScrollableOverlay ref={scrollContainerRef} useScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('oc-sidebar-scroller space-y-1.5 pb-1 pl-2.5 pr-2 [overflow-anchor:none]', props.mobileVariant ? '' : '')}>
       {props.topContent}
       {props.showOnlyMainWorkspace ? (
         <div className="space-y-[0.6rem] py-1">

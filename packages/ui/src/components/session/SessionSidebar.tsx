@@ -1796,40 +1796,38 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         recentSessions={recentSessions}
         prefetchSession={sync.prefetchSession}
       />
-      <div className="oc-sidebar-chrome flex-shrink-0">
-        {!hideDirectoryControls && !isVSCode ? (
-          <SidebarNav onNewSession={handleOpenNewSessionDraftFromHeader} />
-        ) : null}
+      {!hideDirectoryControls && !isVSCode ? (
+        <SidebarNav onNewSession={handleOpenNewSessionDraftFromHeader} />
+      ) : null}
 
-        <SidebarHeader
-          hideDirectoryControls={hideDirectoryControls}
-          showRecentControls={!isVSCode}
-          handleOpenDirectoryDialog={handleOpenDirectoryDialog}
-          onOpenScheduled={() => {
-            if (mobileVariant) setSessionSwitcherOpen(false);
-            setScheduledTasksDialogOpen(true);
-          }}
-          onOpenMultiRun={handleOpenMultiRunFromHeader}
-          canOpenMultiRun={projects.length > 0}
-          onOpenArchive={() => {
-            if (mobileVariant) setSessionSwitcherOpen(false);
-            setArchivePageOpen(true);
-          }}
-          headerActionIconClass={headerActionIconClass}
-          headerActionButtonClass={headerActionButtonClass}
-          isSessionSearchOpen={isSessionSearchOpen}
-          setIsSessionSearchOpen={setIsSessionSearchOpen}
-          sessionSearchInputRef={sessionSearchInputRef}
-          sessionSearchQuery={sessionSearchQuery}
-          setSessionSearchQuery={setSessionSearchQuery}
-          hasSessionSearchQuery={hasSessionSearchQuery}
-          searchMatchCount={searchMatchCount}
-          collapseAllProjects={collapseAllProjects}
-          expandAllProjects={expandAllProjects}
-          selectionModeEnabled={selectionModeEnabled}
-          onToggleSelectionMode={handleToggleSelectionMode}
-        />
-      </div>
+      <SidebarHeader
+        hideDirectoryControls={hideDirectoryControls}
+        showRecentControls={!isVSCode}
+        handleOpenDirectoryDialog={handleOpenDirectoryDialog}
+        onOpenScheduled={() => {
+          if (mobileVariant) setSessionSwitcherOpen(false);
+          setScheduledTasksDialogOpen(true);
+        }}
+        onOpenMultiRun={handleOpenMultiRunFromHeader}
+        canOpenMultiRun={projects.length > 0}
+        onOpenArchive={() => {
+          if (mobileVariant) setSessionSwitcherOpen(false);
+          setArchivePageOpen(true);
+        }}
+        headerActionIconClass={headerActionIconClass}
+        headerActionButtonClass={headerActionButtonClass}
+        isSessionSearchOpen={isSessionSearchOpen}
+        setIsSessionSearchOpen={setIsSessionSearchOpen}
+        sessionSearchInputRef={sessionSearchInputRef}
+        sessionSearchQuery={sessionSearchQuery}
+        setSessionSearchQuery={setSessionSearchQuery}
+        hasSessionSearchQuery={hasSessionSearchQuery}
+        searchMatchCount={searchMatchCount}
+        collapseAllProjects={collapseAllProjects}
+        expandAllProjects={expandAllProjects}
+        selectionModeEnabled={selectionModeEnabled}
+        onToggleSelectionMode={handleToggleSelectionMode}
+      />
 
       {isVisible ? <SidebarProjectsList
         topContent={topContent}
