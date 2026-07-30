@@ -74,6 +74,7 @@ type Props = {
   hideDirectoryControls: boolean;
   projectRepoStatus: Map<string, boolean | null>;
   isDesktopShellRuntime: boolean;
+  stickyZoneHeaders: boolean;
   stuckProjectHeaders: Set<string>;
   mobileVariant: boolean;
   alwaysShowActions: boolean;
@@ -98,7 +99,7 @@ function SidebarProjectsListComponent(props: Props): React.ReactNode {
   streamPerfCount('ui.sidebar_projects_list.render');
   const { t } = useI18n();
   const [hasTopScroll, setHasTopScroll] = React.useState(false);
-  const enableStickyFade = props.isDesktopShellRuntime;
+  const enableStickyFade = props.isDesktopShellRuntime && props.stickyZoneHeaders;
   const projectSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
