@@ -87,6 +87,12 @@ describe('markdown sanitization', () => {
     expect(html).not.toContain('href="javascript:alert(1)"');
     expect(html).not.toContain('href="ms-msdt:/id%20PCWDiagnostic"');
   });
+
+  test('strips app links when the runtime does not support them', () => {
+    const html = renderMarkdownSync('[app](obsidian://open?vault=Notebook)', 'inline', false);
+
+    expect(html).not.toContain('href="obsidian://open?vault=Notebook"');
+  });
 });
 
 describe('Markdown images', () => {

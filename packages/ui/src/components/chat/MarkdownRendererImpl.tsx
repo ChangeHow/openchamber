@@ -94,10 +94,10 @@ const useExternalLinkInteractions = ({
       const href = anchor.getAttribute('href') ?? '';
       if (isAppLinkUrl(href)) {
         if (isVSCode) {
-          // VS Code owns custom-protocol handling through vscode.env.openExternal.
+          // VS Code keeps main's unsupported app-link behavior. This only
+          // applies if a custom href reaches the DOM despite sanitization.
           event.preventDefault();
           event.stopPropagation();
-          void openExternalUrl(href);
           return;
         }
 
@@ -867,6 +867,7 @@ const useMorphdomMarkdown = ({
   streaming,
   cacheKey,
   imageMode = 'inline',
+  allowAppLinks = true,
   syntaxVars,
   ctx,
 }: {
@@ -875,6 +876,7 @@ const useMorphdomMarkdown = ({
   streaming: boolean;
   cacheKey: string;
   imageMode?: MarkdownImageMode;
+  allowAppLinks?: boolean;
   syntaxVars: Record<string, string>;
   ctx: DecorateContext;
 }) => {
@@ -913,7 +915,7 @@ const useMorphdomMarkdown = ({
       // `display:contents` keeps margin-collapsing/spacing identical to a flat
       // HTML body — the wrapper exists only for per-block reconciliation.
       block.style.display = 'contents';
-      block.innerHTML = renderMarkdownSync(text, imageMode);
+      block.innerHTML = renderMarkdownSync(text, imageMode, allowAppLinks);
       // Decorate synchronously too: wrap code blocks in their framed card,
       // mark inline code, build table controls, etc. The async pass re-decorates
       // its own DOM before morphing, so without this the first paint shows bare
@@ -925,7 +927,7 @@ const useMorphdomMarkdown = ({
         refreshMermaidViewers();
       }
     }
-  }, [containerRef, text, imageMode, ctx, refreshMermaidViewers]);
+  }, [containerRef, text, imageMode, allowAppLinks, ctx, refreshMermaidViewers]);
 
   React.useEffect(() => () => {
     mermaidViewerRef.current?.cleanup();
@@ -938,7 +940,7 @@ const useMorphdomMarkdown = ({
     const target = container.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
     let active = true;
 
-    void renderMarkdownBlocks(text, streaming, cacheKey, imageMode).then((blocks) => {
+    void renderMarkdownBlocks(text, streaming, cacheKey, imageMode, allowAppLinks).then((blocks) => {
       if (!active) return;
       const existing = Array.from(target.children) as HTMLElement[];
 
@@ -989,7 +991,7 @@ const useMorphdomMarkdown = ({
     return () => {
       active = false;
     };
-  }, [containerRef, text, streaming, cacheKey, imageMode, ctx, refreshMermaidViewers]);
+  }, [containerRef, text, streaming, cacheKey, imageMode, allowAppLinks, ctx, refreshMermaidViewers]);
 
   React.useEffect(() => {
     const container = containerRef.current;
@@ -1078,6 +1080,7 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
     streaming: live,
     cacheKey,
     imageMode: variant === 'assistant' ? 'label' : 'inline',
+    allowAppLinks: !runtime.isVSCode,
     syntaxVars,
     ctx,
   });
@@ -1169,6 +1172,7 @@ const SimpleMarkdownRendererImpl: React.FC<{
     text: renderedContent,
     streaming: false,
     cacheKey: `simple:${variant}`,
+    allowAppLinks: !runtime.isVSCode,
     syntaxVars,
     ctx,
   });

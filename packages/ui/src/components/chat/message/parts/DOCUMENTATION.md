@@ -56,8 +56,8 @@ Use this doc when you ask an agent to change tool/header/description behavior.
   forbidden, so message content cannot inject active DOM or application-wide
   CSS into any runtime surface. Custom application links are retained only for
   approved schemes. They go through the app-link confirmation flow in every
-  renderer except VS Code, which delegates approved app links to its native
-  external-URI handler.
+  supported renderer. VS Code keeps the main-branch behavior and strips app
+  links from rendered Markdown.
 - Final assistant Markdown rendering is independent from image gallery
   extraction: gallery presence never changes the chat body. Assistant image
   syntax consistently renders as a shared image icon followed by its filename,
