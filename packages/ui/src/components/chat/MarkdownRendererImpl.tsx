@@ -65,17 +65,13 @@ const useExternalLinkInteractions = ({
   enabled?: boolean;
 }) => {
   React.useEffect(() => {
-    if (enabled === false) {
-      return;
-    }
-
     const container = containerRef.current;
     if (!container) {
       return;
     }
 
-    const handleClick = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+    const handleLinkActivation = (event: MouseEvent, allowExternalHttp: boolean) => {
+      if (event.defaultPrevented) {
         return;
       }
 
@@ -103,7 +99,7 @@ const useExternalLinkInteractions = ({
         return;
       }
 
-      if (!isExternalHttpUrl(href)) {
+      if (!allowExternalHttp || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || !isExternalHttpUrl(href)) {
         return;
       }
 
@@ -112,9 +108,22 @@ const useExternalLinkInteractions = ({
       void openExternalUrl(href);
     };
 
+    const handleClick = (event: MouseEvent) => {
+      // App links must be intercepted before modifier checks: target=_blank
+      // otherwise reaches Electron's native external-navigation fallback.
+      handleLinkActivation(event, enabled !== false);
+    };
+
+    const handleAuxClick = (event: MouseEvent) => {
+      if (event.button !== 1) return;
+      handleLinkActivation(event, false);
+    };
+
     container.addEventListener('click', handleClick);
+    container.addEventListener('auxclick', handleAuxClick);
     return () => {
       container.removeEventListener('click', handleClick);
+      container.removeEventListener('auxclick', handleAuxClick);
     };
   }, [containerRef, enabled]);
 };
@@ -1168,6 +1177,7 @@ const SimpleMarkdownRendererImpl: React.FC<{
   content: string;
   className?: string;
   variant?: MarkdownVariant;
+  // App links remain confirmed even where ordinary HTTP link handling is off.
   disableLinkSafety?: boolean;
   stripFrontmatter?: boolean;
   onShowPopup?: (content: ToolPopupContent) => void;

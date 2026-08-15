@@ -44,10 +44,14 @@ describe('isAppLinkUrl', () => {
     expect(isAppLinkUrl('intent://scan/#Intent;scheme=zxing;end')).toBe(false);
     expect(isAppLinkUrl('chrome://settings')).toBe(false);
     expect(isAppLinkUrl('devtools://devtools/bundled/inspector.html')).toBe(false);
+    expect(isAppLinkUrl('ms-msdt:/id%20PCWDiagnostic')).toBe(false);
+    expect(isAppLinkUrl('search-ms:query=report')).toBe(false);
+    expect(isAppLinkUrl('shell:AppsFolder')).toBe(false);
   });
 
   test('rejects OpenChamber and Capacitor self-deep-links', () => {
     expect(isAppLinkUrl('openchamber://connect?host=x')).toBe(false);
+    expect(isAppLinkUrl('openchamber-ui://app/index.html')).toBe(false);
     expect(isAppLinkUrl('capacitor://localhost/index.html')).toBe(false);
   });
 

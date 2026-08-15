@@ -1530,6 +1530,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.appLink.confirm.title': 'このリンクを別のアプリで開きますか？',
   'chat.appLink.confirm.description': 'このチャットのリンクは {scheme} プロトコルを使用し、別のアプリで開かれます。',
   'chat.appLink.confirm.descriptionPlain': 'このチャットのリンクは別のアプリで開かれます。',
+  'chat.appLink.confirm.cancel': 'キャンセル',
   'chat.appLink.confirm.open': '一度だけ開く',
   'chat.appLink.confirm.trustAndOpen': '信頼して開く',
   'chat.autoReview.title': 'コードレビューループが実行中です',

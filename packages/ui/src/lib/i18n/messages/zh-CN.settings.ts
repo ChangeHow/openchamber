@@ -401,7 +401,7 @@ export const settingsDict = {
   'settings.common.actions.create': '创建',
   'settings.common.actions.delete': '删除',
   'settings.openchamber.appLinks.title': '应用链接',
-  'settings.openchamber.appLinks.info': '聊天中的应用链接（如 chrome://）经确认后会在其他应用中打开。受信任的协议不再询问。',
+  'settings.openchamber.appLinks.info': '聊天中的应用链接（如 obsidian://）经确认后会在其他应用中打开。受信任的协议不再询问。',
   'settings.openchamber.appLinks.empty': '暂无受信任的应用链接。打开链接时选择“信任并打开”即可添加到这里。',
   'settings.openchamber.appLinks.removeAria': '移除受信任的 {scheme} 链接',
   'settings.common.actions.reset': '重置',

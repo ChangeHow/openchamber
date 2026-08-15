@@ -1503,6 +1503,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.appLink.confirm.title": "Abrir este link em outro aplicativo?",
   "chat.appLink.confirm.description": "Este link do chat usa o protocolo {scheme} e será aberto em outro aplicativo.",
   "chat.appLink.confirm.descriptionPlain": "Este link do chat será aberto em outro aplicativo.",
+  "chat.appLink.confirm.cancel": "Cancelar",
   "chat.appLink.confirm.open": "Abrir uma vez",
   "chat.appLink.confirm.trustAndOpen": "Confiar e abrir",
   'chat.autoReview.title': 'O ciclo de revisão de código está em andamento',

@@ -54,7 +54,9 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 - Assistant markdown treats raw HTML as inert visible text. The final generated
   HTML is sanitized as defense in depth, with script and style elements
   forbidden, so message content cannot inject active DOM or application-wide
-  CSS into any runtime surface.
+  CSS into any runtime surface. Custom application links are retained only for
+  approved schemes and always go through the app-link confirmation flow in
+  both assistant and user message renderers.
 - Final assistant Markdown collects HTTP(S), embedded, and workspace-local
   PNG/JPEG/GIF/WebP image candidates into one 100px thumbnail gallery in the
   message-completion area after all message text and above the turn's changed

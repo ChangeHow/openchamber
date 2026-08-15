@@ -1527,6 +1527,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.appLink.confirm.title': '이 링크를 다른 앱에서 열까요?',
   'chat.appLink.confirm.description': '이 채팅 링크는 {scheme} 프로토콜을 사용하며 다른 앱에서 열립니다.',
   'chat.appLink.confirm.descriptionPlain': '이 채팅 링크는 다른 앱에서 열립니다.',
+  'chat.appLink.confirm.cancel': '취소',
   'chat.appLink.confirm.open': '한 번만 열기',
   'chat.appLink.confirm.trustAndOpen': '신뢰하고 열기',
   'chat.autoReview.title': '코드 리뷰 루프 실행 중',

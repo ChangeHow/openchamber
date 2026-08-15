@@ -61,6 +61,9 @@ export const AppLinkConfirmDialog = () => {
           {url}
         </div>
         <DialogFooter>
+          <Button variant="ghost" autoFocus onClick={() => settle('cancel')}>
+            {t('chat.appLink.confirm.cancel')}
+          </Button>
           <Button variant="outline" onClick={() => settle('trust')}>
             {t('chat.appLink.confirm.trustAndOpen')}
           </Button>

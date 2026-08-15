@@ -37,7 +37,6 @@ const BROWSER_HANDLED_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'sms'
 
 /**
  * Schemes that must never be preserved or opened from rendered chat content.
- * Keep in sync with the mirror in packages/electron/main.mjs.
  */
 const BLOCKED_APP_LINK_SCHEMES = new Set([
   // Scriptable or web-content schemes
@@ -50,8 +49,11 @@ const BLOCKED_APP_LINK_SCHEMES = new Set([
   'ws', 'wss', 'ftp', 'ftps',
   // Android intent URIs can launch arbitrary components with extras
   'intent',
+  // Historically abused Windows handlers can invoke diagnostic, shell, or
+  // file-search flows that must not be offered from untrusted chat content.
+  'ms-msdt', 'search-ms', 'shell',
   // OpenChamber's own schemes must not be re-launched from chat content
-  'openchamber', 'capacitor',
+  'openchamber', 'openchamber-ui', 'capacitor',
 ]);
 
 const APP_LINK_SCHEME_RE = /^[a-z][a-z0-9+.-]{1,31}$/;

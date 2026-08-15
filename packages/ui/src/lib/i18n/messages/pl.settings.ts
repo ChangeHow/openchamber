@@ -216,7 +216,7 @@ export const settingsDict = {
   'settings.common.actions.create': 'Utwórz',
   'settings.common.actions.delete': 'Usuń',
   'settings.openchamber.appLinks.title': 'Linki aplikacji',
-  'settings.openchamber.appLinks.info': 'Linki aplikacji z czatu (np. chrome://) otwierają się w innej aplikacji po potwierdzeniu. Zaufane protokoły otwierają się bez ponownego pytania.',
+  'settings.openchamber.appLinks.info': 'Linki aplikacji z czatu (np. obsidian://) otwierają się w innej aplikacji po potwierdzeniu. Zaufane protokoły otwierają się bez ponownego pytania.',
   'settings.openchamber.appLinks.empty': 'Brak zaufanych linków aplikacji. Wybierz „Zaufaj i otwórz” podczas otwierania linku, aby dodać go tutaj.',
   'settings.openchamber.appLinks.removeAria': 'Usuń zaufane linki {scheme}',
   'settings.common.actions.duplicate': 'Duplikuj',

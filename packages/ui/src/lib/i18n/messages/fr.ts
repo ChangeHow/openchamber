@@ -1290,6 +1290,7 @@ export const dict = {
   'chat.appLink.confirm.title': 'Ouvrir ce lien dans une autre application ?',
   'chat.appLink.confirm.description': "Ce lien de discussion utilise le protocole {scheme} et s'ouvrira dans une autre application.",
   'chat.appLink.confirm.descriptionPlain': "Ce lien de discussion s'ouvrira dans une autre application.",
+  'chat.appLink.confirm.cancel': 'Annuler',
   'chat.appLink.confirm.open': 'Ouvrir une fois',
   'chat.appLink.confirm.trustAndOpen': 'Approuver et ouvrir',
   'chat.autoReview.title': 'La boucle de revue de code est en cours',

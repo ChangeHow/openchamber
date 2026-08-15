@@ -401,7 +401,7 @@ export const settingsDict = {
   "settings.common.actions.create": "Створити",
   "settings.common.actions.delete": "Видалити",
   "settings.openchamber.appLinks.title": "Посилання програм",
-  "settings.openchamber.appLinks.info": "Посилання програм із чату (наприклад, chrome://) відкриваються в іншій програмі після підтвердження. Довіреним протоколам повторне підтвердження не потрібне.",
+  "settings.openchamber.appLinks.info": "Посилання програм із чату (наприклад, obsidian://) відкриваються в іншій програмі після підтвердження. Довіреним протоколам повторне підтвердження не потрібне.",
   "settings.openchamber.appLinks.empty": "Довіренних посилань програм ще немає. Виберіть «Довірити і відкрити» під час відкриття посилання, щоб додати його тут.",
   "settings.openchamber.appLinks.removeAria": "Видалити довірені посилання {scheme}",
   "settings.common.actions.reset": "Скинути",

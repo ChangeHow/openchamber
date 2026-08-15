@@ -324,7 +324,7 @@ export const settingsDict = {
   'settings.common.actions.create': 'Créer',
   'settings.common.actions.delete': 'Supprimer',
   'settings.openchamber.appLinks.title': 'Liens d’application',
-  'settings.openchamber.appLinks.info': 'Les liens d’application du chat (ex. chrome://) s’ouvrent dans une autre application après confirmation. Les protocoles de confiance s’ouvrent sans nouvelle demande.',
+  'settings.openchamber.appLinks.info': 'Les liens d’application du chat (ex. obsidian://) s’ouvrent dans une autre application après confirmation. Les protocoles de confiance s’ouvrent sans nouvelle demande.',
   'settings.openchamber.appLinks.empty': 'Aucun lien d’application approuvé pour le moment. Choisissez « Approuver et ouvrir » lors de l’ouverture d’un lien pour l’ajouter ici.',
   'settings.openchamber.appLinks.removeAria': 'Supprimer les liens {scheme} approuvés',
   'settings.common.actions.reset': 'Réinitialiser',

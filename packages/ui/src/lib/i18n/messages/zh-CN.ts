@@ -1491,6 +1491,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.appLink.confirm.title': '要在其他应用中打开此链接吗？',
   'chat.appLink.confirm.description': '此聊天链接使用 {scheme} 协议，将在其他应用中打开。',
   'chat.appLink.confirm.descriptionPlain': '此聊天链接将在其他应用中打开。',
+  'chat.appLink.confirm.cancel': '取消',
   'chat.appLink.confirm.open': '打开一次',
   'chat.appLink.confirm.trustAndOpen': '信任并打开',
   'chat.autoReview.title': '代码审查循环正在运行',
