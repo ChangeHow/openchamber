@@ -64,6 +64,9 @@ const useExternalLinkInteractions = ({
   containerRef: React.RefObject<HTMLDivElement | null>;
   enabled?: boolean;
 }) => {
+  const runtimeApis = useRuntimeAPIs();
+  const isVSCode = runtimeApis.runtime.isVSCode;
+
   React.useEffect(() => {
     const container = containerRef.current;
     if (!container) {
@@ -91,6 +94,14 @@ const useExternalLinkInteractions = ({
 
       const href = anchor.getAttribute('href') ?? '';
       if (isAppLinkUrl(href)) {
+        if (isVSCode) {
+          // VS Code owns custom-protocol handling through vscode.env.openExternal.
+          event.preventDefault();
+          event.stopPropagation();
+          void openExternalUrl(href);
+          return;
+        }
+
         // Custom application deep links (obsidian://, vscode://, ...) open in
         // another application, so they require explicit user confirmation.
         event.preventDefault();
@@ -125,7 +136,7 @@ const useExternalLinkInteractions = ({
       container.removeEventListener('click', handleClick);
       container.removeEventListener('auxclick', handleAuxClick);
     };
-  }, [containerRef, enabled]);
+  }, [containerRef, enabled, isVSCode]);
 };
 
 const useMarkdownImageLinkInteractions = ({

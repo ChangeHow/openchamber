@@ -182,6 +182,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.appLinks.title',
     descriptionKey: 'settings.openchamber.appLinks.info',
     keywords: ['security', 'app link', 'deep link', 'scheme', 'protocol', 'obsidian', 'notion'],
+    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'chat.render-mode',
