@@ -3,6 +3,7 @@ import remend from 'remend';
 import katex from 'katex';
 import DOMPurify from 'dompurify';
 import { buildAgentMentionUrl, parseAgentHref, parseSkillHref } from '@/lib/messages/inlineMessageLinks';
+import { isAppLinkUrl } from '@/lib/url';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { highlightCodeInWorker } from './markdown-worker';
 import { escapeRawMarkdownHtml, isLocalFileUrl, MARKDOWN_FORBIDDEN_TAGS } from './markdownSecurity';
@@ -402,7 +403,10 @@ const ensureSanitizeHook = (): void => {
   sanitizeHookInstalled = true;
   DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
     if (!(node instanceof HTMLAnchorElement) || data.attrName !== 'href') return;
-    if (isLocalFileUrl(data.attrValue)) data.forceKeepAttr = true;
+    // DOMPurify's default URI policy strips custom application schemes
+    // (obsidian://, vscode://, ...). Keep them for anchors; dangerous schemes
+    // stay excluded via isAppLinkUrl and clicks go through confirmation.
+    if (isLocalFileUrl(data.attrValue) || isAppLinkUrl(data.attrValue)) data.forceKeepAttr = true;
   });
   DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     if (!(node instanceof HTMLAnchorElement)) return;

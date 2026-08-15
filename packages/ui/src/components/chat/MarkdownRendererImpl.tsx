@@ -5,10 +5,11 @@ import type { Part } from '@opencode-ai/sdk/v2';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { runtimeFetch } from '@/lib/runtime-fetch';
-import { isExternalHttpUrl, openExternalUrl } from '@/lib/url';
+import { isAppLinkUrl, isExternalHttpUrl, openExternalUrl } from '@/lib/url';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import type { Theme } from '@/types/theme';
+import { openAppLinkWithConfirmation } from './appLinkConfirmation';
 import type { ToolPopupContent } from './message/types';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import { useUIStore } from '@/stores/useUIStore';
@@ -93,6 +94,15 @@ const useExternalLinkInteractions = ({
       }
 
       const href = anchor.getAttribute('href') ?? '';
+      if (isAppLinkUrl(href)) {
+        // Custom application deep links (obsidian://, vscode://, ...) open in
+        // another application, so they require explicit user confirmation.
+        event.preventDefault();
+        event.stopPropagation();
+        void openAppLinkWithConfirmation(href);
+        return;
+      }
+
       if (!isExternalHttpUrl(href)) {
         return;
       }
