@@ -1,3 +1,11 @@
+## [Unreleased]
+
+- Git: the pull request panel now follows the current open PR for the branch instead of keeping a merged or closed one after reload or a later open PR (thanks to @makeittech).
+
+## [1.18.4] - 2026-08-14
+
+- **Chat:** new messages now remain at the end of the conversation instead of jumping before older messages after the message ID sequence rolls over; history loading, revert, and redo follow the same chronological order.
+
 ## [1.18.3] - 2026-08-14
 
 - Chat images: completed assistant replies now collect Markdown images into a compact gallery with thumbnails and full-screen previews, including workspace-local images across multi-root workspaces (thanks to @ChangeHow).

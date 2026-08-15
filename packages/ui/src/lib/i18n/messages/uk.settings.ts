@@ -1,3 +1,4 @@
+import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 export const settingsDict = {
   'settings.providers.page.openCodeGo.title': 'Відстеження використання OpenCode Go',
   'settings.providers.page.openCodeGo.description': 'Підключіть панель OpenCode Go, щоб бачити ковзну, тижневу та місячну квоту.',
@@ -1164,6 +1165,7 @@ export const settingsDict = {
   "settings.usage.page.header.providerUsage": "Використання {provider}",
   "settings.usage.page.header.refreshing": "Оновлення використання...",
   "settings.usage.page.header.lastUpdated": "Останнє оновлення: {time}",
+  "settings.usage.page.header.lastUpdatedWithPlan": "План: {plan} · Останнє оновлення: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Показувати в панелі статусу роботи",
   "settings.usage.page.options.showInWorkStatus": "Показувати в панелі статусу роботи",
   "settings.usage.page.options.showInWorkStatusTooltip": "Якщо ввімкнути, використання цього провайдера буде видно в панелі статусу роботи.",
@@ -2137,4 +2139,5 @@ export const settingsDict = {
   "settings.openchamber.visual.field.followUpBehaviorDescription": "Choose what happens when you press Enter on a follow-up message while the agent is still responding.",
   "settings.openchamber.visual.option.followUpBehavior.steer.label": "Steer",
   "settings.openchamber.visual.option.followUpBehavior.queue.label": "Queue",
+  ...thirdPartyIntegrationI18n.uk,
 } as const;
