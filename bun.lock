@@ -24,7 +24,7 @@
         "@codemirror/lint": "^6.9.2",
         "@codemirror/search": "^6.6.0",
         "@codemirror/state": "^6.5.4",
-        "@codemirror/view": "6.39.13",
+        "@codemirror/view": "6.39.17",
         "@heroui/scroll-shadow": "^2.3.18",
         "@heroui/system": "^2.4.23",
         "@heroui/theme": "^2.4.23",
@@ -163,7 +163,7 @@
         "@codemirror/lint": "^6.9.2",
         "@codemirror/search": "^6.6.0",
         "@codemirror/state": "^6.5.4",
-        "@codemirror/view": "6.39.13",
+        "@codemirror/view": "6.39.17",
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
         "@dnd-kit/utilities": "^3.2.2",
@@ -356,7 +356,7 @@
   },
   "overrides": {
     "@codemirror/language": "6.12.2",
-    "@codemirror/view": "6.39.13",
+    "@codemirror/view": "6.39.17",
   },
   "packages": {
     "7zip-bin": ["7zip-bin@5.2.0", "", {}, "sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A=="],
@@ -661,7 +661,7 @@
 
     "@codemirror/state": ["@codemirror/state@6.5.4", "", { "dependencies": { "@marijn/find-cluster-break": "^1.0.0" } }, "sha512-8y7xqG/hpB53l25CIoit9/ngxdfoG+fx+V3SHBrinnhOtLvKHRyAJJuHzkWrR4YXXLX8eXBsejgAAxHUOdW1yw=="],
 
-    "@codemirror/view": ["@codemirror/view@6.39.13", "", { "dependencies": { "@codemirror/state": "^6.5.0", "crelt": "^1.0.6", "style-mod": "^4.1.0", "w3c-keyname": "^2.2.4" } }, "sha512-QBO8ZsgJLCbI28KdY0/oDy5NQLqOQVZCozBknxc2/7L98V+TVYFHnfaCsnGh1U+alpd2LOkStVwYY7nW2R1xbw=="],
+    "@codemirror/view": ["@codemirror/view@6.39.17", "", { "dependencies": { "@codemirror/state": "^6.5.0", "crelt": "^1.0.6", "style-mod": "^4.1.0", "w3c-keyname": "^2.2.4" } }, "sha512-Aim4lFqhbijnchl83RLfABWueSGs1oUCSv0mru91QdhpXQeNKprIdRO9LWA4cYkJvuYTKGJN7++9MXx8XW43ag=="],
 
     "@date-fns/tz": ["@date-fns/tz@1.4.1", "", {}, "sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA=="],
 

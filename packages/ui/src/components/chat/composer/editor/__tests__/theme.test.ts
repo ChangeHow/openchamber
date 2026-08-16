@@ -6,6 +6,7 @@ import {
     NATIVE_SELECTION_THEME_SPEC,
     composerEditorTheme,
     composerNativeSelectionExtension,
+    isIOSNavigator,
 } from '../theme';
 
 const selectors = Object.keys(COMPOSER_EDITOR_THEME_SPEC);
@@ -108,12 +109,9 @@ describe('composerNativeSelectionTheme', () => {
     const nativeDeclarations = JSON.stringify(NATIVE_SELECTION_THEME_SPEC);
 
     /**
-     * Every device layers this over `drawSelection()`: the native selection
-     * paints over token backgrounds (the painted layer is hidden behind them)
-     * and iOS attaches its selection handles to it. `drawSelection()` must
-     * NOT be removed for that: without it CodeMirror starts enforcing cursor
-     * association on the native selection while typing in wrapped text, and
-     * iOS answers those programmatic selection moves with severe input lag.
+     * Non-iOS devices layer this over `drawSelection()` so the native selection
+     * paints over token backgrounds. iOS instead uses the handles drawn by
+     * CodeMirror 6.39.17 and skips this workaround entirely.
      */
     test('it compiles and can be installed', () => {
         let failure: unknown = null;
@@ -123,6 +121,32 @@ describe('composerNativeSelectionTheme', () => {
             failure = error;
         }
         expect(failure).toBeNull();
+    });
+
+    test('iOS uses CodeMirror selection handles instead of the native workaround', () => {
+        expect(isIOSNavigator(
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) Mobile/15E148 Safari/604.1',
+            'iPhone',
+            5,
+        )).toBe(true);
+        expect(isIOSNavigator(
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)',
+            'MacIntel',
+            5,
+        )).toBe(true);
+    });
+
+    test('non-iOS platforms keep the native selection workaround', () => {
+        expect(isIOSNavigator(
+            'Mozilla/5.0 (Linux; Android 15)',
+            'Linux armv8l',
+            5,
+        )).toBe(false);
+        expect(isIOSNavigator(
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)',
+            'MacIntel',
+            0,
+        )).toBe(false);
     });
 
     /**
@@ -150,16 +174,10 @@ describe('composerNativeSelectionTheme', () => {
     });
 
     /**
-     * iOS colours its selection drag handles from the caret colour. With
+     * Native selection handles may take their colour from the caret. With
      * `drawSelection()`'s `caret-color: transparent !important` in effect the
-     * handles are drawn — invisibly. The native caret must come back with
-     * enough weight to win, and the drawn cursor layer must go so there are
-     * not two carets.
-     *
-     * BUT a visible native caret makes WebKit re-render its caret UI after
-     * every keystroke's decoration redraw — severe input lag. Both rules are
-     * therefore scoped to `.oc-native-range`, which only exists while a range
-     * is selected (when there is no caret to lag on).
+     * handles can be drawn invisibly. The native caret therefore comes back
+     * only for a range, and the drawn cursor layer goes away at the same time.
      */
     test('the native caret is re-enabled, since the handles take its colour', () => {
         const rule = nativeSelectors.find((selector) =>

@@ -58,23 +58,18 @@ overlay was disabled outright on mobile, where wrapped text drifted anyway.
 **Those constraints are gone**; adding a width-affecting style is now a
 question of design, not of feasibility.
 
-Selection rendering: every device runs CodeMirror's `drawSelection()` — it
-keeps typing on the drawn-selection code path, and removing it makes
-CodeMirror enforce cursor association on the native selection, which iOS
-answers with severe input lag. Every device also layers
-`composerNativeSelectionExtension` (`editor/theme.ts`) on top: it re-shows
-the native selection, and — only while a range is selected — the native caret,
-hiding the painted layers those replace. The native selection is the one that
-shows for two reasons: the painted layer sits behind the content, so tokens
-with their own background (inline code, fences) cover it completely; and
-iOS's selection drag handles attach to the visible native selection and take
-their colour from the caret, so a transparent caret means invisible handles.
-The range-only caret scoping is load-bearing — a native caret visible while
-typing makes WebKit re-render its caret UI after every keystroke, felt as
-severe input lag. The selection tint comes from `--primary`, not the selection
-token:
-themes define `--interactive-selection` with its own alpha, so a translucent
-mix of it is nearly invisible.
+Selection rendering: every device runs CodeMirror's `drawSelection()`. On iOS,
+CodeMirror 6.39.17 also draws the range handles, so
+`composerNativeSelectionExtension` (`editor/theme.ts`) is not installed there.
+Restoring the native selection on top made WebKit maintain two selection UIs
+during composition and measurably slowed input. Other platforms still layer
+the extension over `drawSelection()`: it re-shows the native selection and,
+only while a range is selected, the native caret, hiding the painted layers
+those replace. The native selection paints over token backgrounds that would
+otherwise cover CodeMirror's selection layer. The selection tint comes from
+`--primary`, not the selection token: themes define
+`--interactive-selection` with its own alpha, so a translucent mix of it is
+nearly invisible.
 
 `composerLanguage.ts` retokenizes the whole document on every change. The
 composer holds a prompt, not a source file: it is short enough that a full pass

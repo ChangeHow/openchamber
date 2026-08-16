@@ -234,12 +234,9 @@ export const ComposerEditor = React.forwardRef<ComposerEditorHandle, ComposerEdi
                     doc: handlersRef.current.value,
                     extensions: [
                         history(),
-                        // `drawSelection()` must stay even though the native
-                        // selection is what actually shows (see the theme's
-                        // comment on `composerNativeSelectionExtension`):
-                        // removing it makes CodeMirror enforce cursor
-                        // association on the native selection, which iOS
-                        // answers with severe input lag.
+                        // Keep CodeMirror's selection path on every platform.
+                        // Its current iOS implementation supplies range handles;
+                        // other platforms may layer the native paint over it.
                         drawSelection(),
                         composerNativeSelectionExtension,
                         EditorView.lineWrapping,

@@ -90,25 +90,19 @@ export const COMPOSER_EDITOR_THEME_SPEC = {
 export const composerEditorTheme = EditorView.theme(COMPOSER_EDITOR_THEME_SPEC);
 
 /**
- * Every device keeps `drawSelection()` but shows the NATIVE selection through
- * it, for two independent reasons:
+ * Non-iOS platforms keep `drawSelection()` but show the NATIVE selection
+ * through it, for two independent reasons:
  *
- * - iOS attaches its selection handles (the draggable pins after a
- *   double-tap) to the *visible* native selection, and `drawSelection()`
- *   hides it with `.cm-line ::selection { background: transparent
- *   !important }`, so the handles never appear and range selection is
- *   undiscoverable.
+ * - Native selection handles attach to the visible selection, which
+ *   `drawSelection()` otherwise hides.
  * - The painted selection layer sits *behind* the content, so any token with
  *   its own background — inline code, code fences — covers it completely and
  *   the selection is invisible inside those spans. The native selection
  *   paints over element backgrounds.
  *
- * Dropping `drawSelection()` entirely is NOT an option: without it CodeMirror
- * clears the `nativeSelectionHidden` facet and starts enforcing cursor
- * association on the native selection while typing in wrapped text —
- * programmatic selection moves that iOS answers with severe input lag (each
- * one also resets the keyboard's autocorrect context). Typing must stay on
- * the drawn-selection code path; only the paint changes.
+ * iOS is deliberately excluded. CodeMirror 6.39.17 draws its own iOS range
+ * handles, so restoring the native selection there only makes WebKit maintain
+ * two selection UIs and re-measure them throughout composition.
  *
  * Both rules below fight `drawSelection()`'s own `Prec.highest` theme, so
  * they carry `!important` and one class more specificity
@@ -126,20 +120,17 @@ export const NATIVE_SELECTION_THEME_SPEC = {
         backgroundColor:
             'color-mix(in srgb, var(--primary) 25%, transparent) !important',
     },
-    // iOS derives the colour of its selection UI — the drag handles included —
-    // from the caret colour, and `drawSelection()` sets `caret-color:
-    // transparent !important` on both `.cm-content` and `.cm-line`. A visible
-    // native selection alone is therefore not enough: the handles get drawn,
-    // in transparent.
+    // Browsers can derive native selection UI colours from the caret, and
+    // `drawSelection()` sets `caret-color: transparent !important` on both
+    // `.cm-content` and `.cm-line`. A visible native selection alone can
+    // therefore leave its handles transparent.
     //
-    // But a visible native caret is not free either: while it shows, WebKit
-    // re-renders its caret UI after every keystroke's decoration redraw, which
-    // arrives as severe input lag. The handles only exist while a RANGE is
-    // selected — exactly when there is no caret — so the native caret (and the
-    // drawn cursor layer's absence) are scoped to `.oc-native-range`, which
-    // `composerNativeSelectionExtension` sets on the editor whenever the main
-    // selection is non-empty. Typing stays on the transparent-native-caret
-    // fast path.
+    // The handles only exist while a RANGE is selected — exactly when there is
+    // no caret — so the native caret (and the drawn cursor layer's absence) are
+    // scoped to `.oc-native-range`, which
+    // `composerNativeSelectionExtension` sets whenever the main selection is
+    // non-empty. Typing stays on the drawn-caret path, and iOS avoids this
+    // extension entirely.
     '&.cm-editor.oc-native-range .cm-content, &.cm-editor.oc-native-range .cm-content .cm-line': {
         caretColor: 'var(--surface-foreground) !important',
     },
@@ -154,15 +145,29 @@ export const NATIVE_SELECTION_THEME_SPEC = {
 
 const composerNativeSelectionTheme = EditorView.theme(NATIVE_SELECTION_THEME_SPEC);
 
+export function isIOSNavigator(
+    userAgent: string,
+    platform: string,
+    maxTouchPoints: number,
+): boolean {
+    return /iPad|iPhone|iPod/i.test(userAgent)
+        || (platform === 'MacIntel' && maxTouchPoints > 1);
+}
+
+const usesCodeMirrorIOSSelectionHandles = isIOSNavigator(
+    navigator.userAgent,
+    navigator.platform,
+    navigator.maxTouchPoints,
+);
+
 /**
- * The native-selection arrangement, installed on every device: the theme
- * above plus the `.oc-native-range` marker class that scopes its caret rules
- * to the moments a range is actually selected. `editorAttributes`
- * re-evaluates on every update, so the class follows the selection with no
- * listener of its own.
+ * The native-selection arrangement for platforms where CodeMirror does not
+ * draw mobile range handles. iOS stays entirely on `drawSelection()`'s path.
  */
-export const composerNativeSelectionExtension = [
-    composerNativeSelectionTheme,
-    EditorView.editorAttributes.of((view) =>
-        view.state.selection.main.empty ? null : { class: 'oc-native-range' }),
-];
+export const composerNativeSelectionExtension = usesCodeMirrorIOSSelectionHandles
+    ? []
+    : [
+        composerNativeSelectionTheme,
+        EditorView.editorAttributes.of((view) =>
+            view.state.selection.main.empty ? null : { class: 'oc-native-range' }),
+    ];
