@@ -77,7 +77,6 @@
     "doctor": "node scripts/react-doctor.mjs",
     "deslop": "node scripts/anti-slop.mjs",
     "profile:browser": "node scripts/profile-browser.mjs",
-    "bench:composer-input": "bun scripts/perf/composer-input-benchmark.mjs",
     "icons:sprite": "node scripts/generate-file-type-sprite.mjs",
     "icons:generate": "bun run scripts/generate-icon-sprite.mjs",
     "themes:port:opencode": "tsx scripts/port-opencode-theme.ts",
