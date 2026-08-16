@@ -27,8 +27,8 @@ bun run build:ui && bun run build:web
 cd <a project directory> && node <repo>/packages/web/bin/cli.js serve --port 4599 --foreground
 ```
 
-`profile:idle` and `profile:session` need a running server;
-`profile:animation` serves its own fixture and needs nothing.
+`profile:idle` and `profile:session` need a running server; `profile:animation`
+serves its own fixture and needs nothing.
 
 ## profile:idle
 
