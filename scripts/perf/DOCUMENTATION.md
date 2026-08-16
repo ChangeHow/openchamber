@@ -13,6 +13,7 @@ or extending these scripts. The methodology rules they enforce come from
 | `bun run profile:session` | What receiving and rendering a live assistant response costs. |
 | `bun run profile:animation` | What a CSS animation costs, isolated from the app. |
 | `bun run profile:browser` | A manually driven capture, for interactions that cannot be scripted. |
+| `bun run bench:composer-input` | How composer input latency compares with a native contenteditable under an IME-like mobile workload. |
 
 All of them measure a real browser over CDP. Pass `--help` to any of them for
 the full option list.
@@ -27,8 +28,34 @@ bun run build:ui && bun run build:web
 cd <a project directory> && node <repo>/packages/web/bin/cli.js serve --port 4599 --foreground
 ```
 
-`profile:idle` and `profile:session` need a running server; `profile:animation`
-serves its own fixture and needs nothing.
+`profile:idle`, `profile:session`, and `bench:composer-input` need a running
+server; `profile:animation` serves its own fixture and needs nothing.
+
+## bench:composer-input
+
+Drives the same incremental pinyin input through an unadorned native
+`contenteditable` and the real mobile `ComposerEditor`. It selects and replaces
+the growing pinyin prefix inside synthetic composition boundaries, exercising
+the document and selection work performed by IME updates without relying on
+Chrome's optional `Input.imeSetComposition` implementation. The benchmark
+checks the final text and selection, measures input delivery, main-thread idle,
+and next-frame latency, and fails when the composer/native p95 idle ratio
+exceeds the configured budget.
+
+```bash
+bun run bench:composer-input -- --url http://127.0.0.1:4599/mobile.html --headless
+bun run bench:composer-input -- --cpu-throttle 6 --budget-ratio 5
+```
+
+The harness runs with Bun and drives a production app through Chrome DevTools
+Protocol. It selects CodeMirror's iOS branches before application modules load,
+disables background and occlusion throttling, and verifies that animation
+frames remain live before trusting the result. The first native and composer
+rounds are warm-ups and are excluded from the summary. Password-protected
+servers are unlocked from `OPENCHAMBER_UI_PASSWORD` or
+`OPENCODE_UI_PASSWORD`; the password is never written to the summary. This is a
+stable regression proxy, not a substitute for real IME and WebKit validation
+on an iPhone.
 
 ## profile:idle
 
