@@ -1,5 +1,5 @@
 import { useAppLinkTrustStore } from '@/stores/appLinkTrustStore';
-import { getUrlScheme, openExternalUrl } from '@/lib/url';
+import { getUrlScheme, openConfirmedAppLinkUrl } from '@/lib/url';
 
 export type AppLinkConfirmationChoice = 'open' | 'trust' | 'cancel';
 
@@ -40,7 +40,7 @@ export const openAppLinkWithConfirmation = (url: string): Promise<void> => {
 
   const trustStore = useAppLinkTrustStore.getState();
   if (trustStore.isSchemeTrusted(scheme)) {
-    return openExternalUrl(url).then(() => undefined);
+    return openConfirmedAppLinkUrl(url).then(() => undefined);
   }
 
   if (pendingRequest) {
@@ -55,7 +55,7 @@ export const openAppLinkWithConfirmation = (url: string): Promise<void> => {
       useAppLinkTrustStore.getState().trustScheme(scheme);
     }
     if (choice === 'open' || choice === 'trust') {
-      return openExternalUrl(url).then(() => undefined);
+      return openConfirmedAppLinkUrl(url).then(() => undefined);
     }
   });
 };

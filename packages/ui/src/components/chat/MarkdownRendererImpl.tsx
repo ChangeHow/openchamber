@@ -4,12 +4,12 @@ import { renderMermaidASCII, renderMermaidSVG } from 'beautiful-mermaid';
 import type { Part } from '@opencode-ai/sdk/v2';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
-import { runtimeFetch } from '@/lib/runtime-fetch';
-import { isAppLinkUrl, isExternalHttpUrl, openExternalUrl } from '@/lib/url';
+import { openExternalUrl } from '@/lib/url';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import type { Theme } from '@/types/theme';
 import { openAppLinkWithConfirmation } from './appLinkConfirmation';
+import { attachAppLinkInteractions } from './appLinkInteractions';
 import type { ToolPopupContent } from './message/types';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import { useUIStore } from '@/stores/useUIStore';
@@ -43,6 +43,7 @@ import {
   parseFileReference,
   type ParsedFileReference,
 } from './fileReferenceParser';
+import { fileReferenceExists } from './fileReferenceStat';
 import { streamPerfCount, streamPerfObserve } from '@/stores/utils/streamDebug';
 
 const useCurrentMermaidTheme = () => {
@@ -56,86 +57,25 @@ const useCurrentMermaidTheme = () => {
       : fallbackLight);
 };
 
-const useExternalLinkInteractions = ({
+const useLinkInteractions = ({
   containerRef,
   enabled,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
   enabled?: boolean;
 }) => {
-  const runtimeApis = useRuntimeAPIs();
-  const isVSCode = runtimeApis.runtime.isVSCode;
-
   React.useEffect(() => {
     const container = containerRef.current;
     if (!container) {
       return;
     }
 
-    const handleLinkActivation = (event: MouseEvent, allowExternalHttp: boolean) => {
-      if (event.defaultPrevented) {
-        return;
-      }
-
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-
-      const anchor = target.closest('a[href]');
-      if (!(anchor instanceof HTMLAnchorElement)) {
-        return;
-      }
-
-      if (anchor.getAttribute('data-openchamber-file-link') === 'true') {
-        return;
-      }
-
-      const href = anchor.getAttribute('href') ?? '';
-      if (isAppLinkUrl(href)) {
-        if (isVSCode) {
-          // VS Code keeps main's unsupported app-link behavior. This only
-          // applies if a custom href reaches the DOM despite sanitization.
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-
-        // Custom application deep links (obsidian://, vscode://, ...) open in
-        // another application, so they require explicit user confirmation.
-        event.preventDefault();
-        event.stopPropagation();
-        void openAppLinkWithConfirmation(href);
-        return;
-      }
-
-      if (!allowExternalHttp || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || !isExternalHttpUrl(href)) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      void openExternalUrl(href);
-    };
-
-    const handleClick = (event: MouseEvent) => {
-      // App links must be intercepted before modifier checks: target=_blank
-      // otherwise reaches Electron's native external-navigation fallback.
-      handleLinkActivation(event, enabled !== false);
-    };
-
-    const handleAuxClick = (event: MouseEvent) => {
-      if (event.button !== 1) return;
-      handleLinkActivation(event, false);
-    };
-
-    container.addEventListener('click', handleClick);
-    container.addEventListener('auxclick', handleAuxClick);
-    return () => {
-      container.removeEventListener('click', handleClick);
-      container.removeEventListener('auxclick', handleAuxClick);
-    };
-  }, [containerRef, enabled, isVSCode]);
+    return attachAppLinkInteractions(container, {
+      allowExternalHttp: enabled !== false,
+      openAppLink: (href) => void openAppLinkWithConfirmation(href),
+      openExternalHttp: (href) => void openExternalUrl(href),
+    });
+  }, [containerRef, enabled]);
 };
 
 const DEFAULT_MERMAID_CONTROLS: MermaidControlOptions = {
@@ -181,19 +121,9 @@ const CODE_BLOCK_PATH_SCANNED_ATTR = 'data-openchamber-block-paths-scanned';
 // output. The regex is defined in `./fileReferenceParser`; the inline-code
 // pipeline reads full text content rather than using this regex.
 const MAX_BLOCK_CODE_SCAN_LENGTH = 200_000;
-const FILE_REFERENCE_STAT_CONCURRENCY = 4;
-const FILE_REFERENCE_STAT_CACHE_MAX = 1000;
-const VSCODE_FILE_REFERENCE_STAT_CACHE_MAX = 200;
 const FILE_REFERENCE_LINK_LIMIT = 80;
 const VSCODE_FILE_REFERENCE_LINK_LIMIT = 40;
 const FILE_REFERENCE_ANNOTATION_DELAY_MS = 160;
-const FILE_REFERENCE_STAT_CACHE = new Map<string, Promise<boolean>>();
-let activeFileReferenceStatCount = 0;
-const pendingFileReferenceStats: Array<() => void> = [];
-
-const getFileReferenceStatCacheMax = (): number => (
-  isVSCodeRuntime() ? VSCODE_FILE_REFERENCE_STAT_CACHE_MAX : FILE_REFERENCE_STAT_CACHE_MAX
-);
 
 const getFileReferenceLinkLimit = (): number => (
   isVSCodeRuntime() ? VSCODE_FILE_REFERENCE_LINK_LIMIT : FILE_REFERENCE_LINK_LIMIT
@@ -391,61 +321,6 @@ const getResolvedReference = (rawValue: string, effectiveDirectory: string): (Pa
   };
 };
 
-const fileReferenceExists = (resolvedPath: string): Promise<boolean> => {
-  const normalizedPath = normalizePath(resolvedPath);
-  if (!normalizedPath) {
-    return Promise.resolve(false);
-  }
-
-  const cached = FILE_REFERENCE_STAT_CACHE.get(normalizedPath);
-  if (cached) {
-    FILE_REFERENCE_STAT_CACHE.delete(normalizedPath);
-    FILE_REFERENCE_STAT_CACHE.set(normalizedPath, cached);
-    return cached;
-  }
-
-  const request = new Promise<boolean>((resolve) => {
-    const run = () => {
-      activeFileReferenceStatCount += 1;
-      void runtimeFetch(`/api/fs/stat?path=${encodeURIComponent(normalizedPath)}&optional=true`, {
-        method: 'GET',
-        cache: 'no-store',
-      })
-        .then(async (response) => {
-          if (!response.ok) {
-            resolve(false);
-            return;
-          }
-          const payload = await response.json().catch(() => null) as { exists?: unknown } | null;
-          resolve(payload?.exists !== false);
-        })
-        .catch(() => resolve(false))
-        .finally(() => {
-          activeFileReferenceStatCount = Math.max(0, activeFileReferenceStatCount - 1);
-          pendingFileReferenceStats.shift()?.();
-        });
-    };
-
-    if (activeFileReferenceStatCount < FILE_REFERENCE_STAT_CONCURRENCY) {
-      run();
-      return;
-    }
-
-    pendingFileReferenceStats.push(run);
-  });
-
-  const maxCacheEntries = getFileReferenceStatCacheMax();
-  while (FILE_REFERENCE_STAT_CACHE.size >= maxCacheEntries) {
-    const oldest = FILE_REFERENCE_STAT_CACHE.keys().next().value;
-    if (typeof oldest !== 'string') {
-      break;
-    }
-    FILE_REFERENCE_STAT_CACHE.delete(oldest);
-  }
-  FILE_REFERENCE_STAT_CACHE.set(normalizedPath, request);
-  return request;
-};
-
 const getContextDirectory = (effectiveDirectory: string, resolvedPath: string): string => {
   return effectiveDirectory || getDirectoryForFilePath(effectiveDirectory, resolvedPath);
 };
@@ -551,7 +426,7 @@ const useFileReferenceInteractions = ({
           && !isFilePathWithinDirectory(resolved.resolvedPath, effectiveDirectory);
         const existsPromise = canGrantOutsideFile
           ? Promise.resolve(true)
-          : fileReferenceExists(resolved.resolvedPath);
+          : fileReferenceExists(resolved.resolvedPath, effectiveDirectory);
 
         void existsPromise.then((exists) => {
           if (cancelled || !exists || !container.contains(candidate)) {
@@ -865,18 +740,14 @@ const useMorphdomMarkdown = ({
   containerRef,
   text,
   streaming,
-  cacheKey,
   imageMode = 'inline',
-  allowAppLinks = true,
   syntaxVars,
   ctx,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
   text: string;
   streaming: boolean;
-  cacheKey: string;
   imageMode?: MarkdownImageMode;
-  allowAppLinks?: boolean;
   syntaxVars: Record<string, string>;
   ctx: DecorateContext;
 }) => {
@@ -915,7 +786,7 @@ const useMorphdomMarkdown = ({
       // `display:contents` keeps margin-collapsing/spacing identical to a flat
       // HTML body — the wrapper exists only for per-block reconciliation.
       block.style.display = 'contents';
-      block.innerHTML = renderMarkdownSync(text, imageMode, allowAppLinks);
+      block.innerHTML = renderMarkdownSync(text, imageMode);
       // Decorate synchronously too: wrap code blocks in their framed card,
       // mark inline code, build table controls, etc. The async pass re-decorates
       // its own DOM before morphing, so without this the first paint shows bare
@@ -927,7 +798,7 @@ const useMorphdomMarkdown = ({
         refreshMermaidViewers();
       }
     }
-  }, [containerRef, text, imageMode, allowAppLinks, ctx, refreshMermaidViewers]);
+  }, [containerRef, text, imageMode, ctx, refreshMermaidViewers]);
 
   React.useEffect(() => () => {
     mermaidViewerRef.current?.cleanup();
@@ -940,7 +811,7 @@ const useMorphdomMarkdown = ({
     const target = container.querySelector<HTMLElement>('[data-markdown-content]') ?? container;
     let active = true;
 
-    void renderMarkdownBlocks(text, streaming, cacheKey, imageMode, allowAppLinks).then((blocks) => {
+    void renderMarkdownBlocks(text, streaming, imageMode).then((blocks) => {
       if (!active) return;
       const existing = Array.from(target.children) as HTMLElement[];
 
@@ -991,7 +862,7 @@ const useMorphdomMarkdown = ({
     return () => {
       active = false;
     };
-  }, [containerRef, text, streaming, cacheKey, imageMode, allowAppLinks, ctx, refreshMermaidViewers]);
+  }, [containerRef, text, streaming, imageMode, ctx, refreshMermaidViewers]);
 
   React.useEffect(() => {
     const container = containerRef.current;
@@ -1068,19 +939,18 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
     preferRuntimeEditor: runtime.isVSCode,
     enabled: enableFileReferences && !isStreaming,
   });
-  useExternalLinkInteractions({ containerRef });
+  useLinkInteractions({ containerRef });
 
   const syntaxVars = React.useMemo(() => getMarkdownSyntaxVars(currentTheme), [currentTheme]);
   const ctx = useDecorateContext(currentTheme, live, effectiveDirectory ? handlePreviewLoopback : undefined, DEFAULT_MERMAID_CONTROLS);
-  const cacheKey = `markdown-${part?.id ? `part-${part.id}` : `message-${messageId}`}`;
+  // Identity for the fade-in wrapper: a new part/message restarts the animation.
+  const fadeKey = `markdown-${part?.id ? `part-${part.id}` : `message-${messageId}`}`;
 
   useMorphdomMarkdown({
     containerRef,
     text: content,
     streaming: live,
-    cacheKey,
     imageMode: variant === 'assistant' ? 'label' : 'inline',
-    allowAppLinks: !runtime.isVSCode,
     syntaxVars,
     ctx,
   });
@@ -1093,7 +963,7 @@ const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
 
   if (isAnimated) {
     return (
-      <FadeInOnReveal key={cacheKey} skipAnimation={skipFadeIn}>
+      <FadeInOnReveal key={fadeKey} skipAnimation={skipFadeIn}>
         {markdownContent}
       </FadeInOnReveal>
     );
@@ -1162,7 +1032,7 @@ const SimpleMarkdownRendererImpl: React.FC<{
     preferRuntimeEditor: runtime.isVSCode,
     enabled: enableFileReferences,
   });
-  useExternalLinkInteractions({ containerRef, enabled: !disableLinkSafety });
+  useLinkInteractions({ containerRef, enabled: !disableLinkSafety });
 
   const syntaxVars = React.useMemo(() => getMarkdownSyntaxVars(currentTheme), [currentTheme]);
   const ctx = useDecorateContext(currentTheme, false, undefined, mermaidControls);
@@ -1171,8 +1041,6 @@ const SimpleMarkdownRendererImpl: React.FC<{
     containerRef,
     text: renderedContent,
     streaming: false,
-    cacheKey: `simple:${variant}`,
-    allowAppLinks: !runtime.isVSCode,
     syntaxVars,
     ctx,
   });

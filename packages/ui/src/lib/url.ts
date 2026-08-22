@@ -143,7 +143,7 @@ export const extractLoopbackUrls = (text: string): string[] => {
  * @param url - The URL to open
  * @returns Promise<boolean> - true if the URL was opened successfully
  */
-export const openExternalUrl = async (url: string): Promise<boolean> => {
+const openValidatedExternalUrl = async (url: string): Promise<boolean> => {
   if (typeof window === 'undefined') {
     return false;
   }
@@ -155,11 +155,6 @@ export const openExternalUrl = async (url: string): Promise<boolean> => {
 
   const parsed = parseUrlSafely(target);
   if (!parsed) {
-    return false;
-  }
-
-  const isHttpLink = parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  if (!isHttpLink && !isAppLinkUrl(target)) {
     return false;
   }
 
@@ -192,3 +187,10 @@ export const openExternalUrl = async (url: string): Promise<boolean> => {
     return false;
   }
 };
+
+export const openExternalUrl = (url: string): Promise<boolean> =>
+  isExternalHttpUrl(url) ? openValidatedExternalUrl(url) : Promise.resolve(false);
+
+/** Opens a classified app link after the caller has completed confirmation. */
+export const openConfirmedAppLinkUrl = (url: string): Promise<boolean> =>
+  isAppLinkUrl(url) ? openValidatedExternalUrl(url) : Promise.resolve(false);

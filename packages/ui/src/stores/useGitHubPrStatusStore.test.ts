@@ -4,7 +4,7 @@ import type { GitHubPullRequestStatus, RuntimeAPIs } from "@/lib/api/types"
 let runtimeKey = "runtime-a"
 mock.module("@/lib/runtime-switch", () => ({ getRuntimeKey: () => runtimeKey }))
 
-const { getGitHubPrStatusKey, useGitHubPrStatusStore } = await import("./useGitHubPrStatusStore")
+const { getFreshestPrStatusForBranch, getGitHubPrStatusKey, useGitHubPrStatusStore } = await import("./useGitHubPrStatusStore")
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void
@@ -36,6 +36,34 @@ describe("GitHub PR status cache ownership", () => {
     const originB = getGitHubPrStatusKey("/repo", "main", "origin")
 
     expect(new Set([originA, upstreamA, originB]).size).toBe(3)
+  })
+
+  test("passive branch readers follow the freshest remote-keyed status", () => {
+    const automatic = getGitHubPrStatusKey("/repo", "feature")
+    const origin = getGitHubPrStatusKey("/repo", "feature", "origin")
+    useGitHubPrStatusStore.getState().ensureEntry(automatic)
+    useGitHubPrStatusStore.getState().ensureEntry(origin)
+    useGitHubPrStatusStore.getState().updateStatus(automatic, () => ({
+      connected: true,
+      pr: { number: 7, title: "old", url: "u7", state: "open", draft: false, base: "main", head: "feature" },
+      checks: { state: "pending", total: 3, success: 1, failure: 0, pending: 2 },
+    }))
+    useGitHubPrStatusStore.getState().updateStatus(origin, () => ({
+      connected: true,
+      pr: { number: 7, title: "current", url: "u7", state: "open", draft: false, base: "main", head: "feature" },
+      checks: { state: "success", total: 3, success: 3, failure: 0, pending: 0 },
+    }))
+    useGitHubPrStatusStore.setState((state) => ({
+      entries: {
+        ...state.entries,
+        [automatic]: { ...state.entries[automatic], lastRefreshAt: 1 },
+        [origin]: { ...state.entries[origin], lastRefreshAt: 2 },
+      },
+    }))
+
+    const freshest = getFreshestPrStatusForBranch(useGitHubPrStatusStore.getState().entries, "/repo", "feature")
+    expect(freshest?.pr?.title).toBe("current")
+    expect(freshest?.checks?.pending).toBe(0)
   })
 
   test("rejects a response after params change", async () => {
@@ -371,7 +399,7 @@ describe("GitHub PR status stale terminal associations", () => {
     expect(useGitHubPrStatusStore.getState().entries[key]?.status?.pr).toBeNull()
   })
 
-  test("does not seed sibling entries from a closed PR", () => {
+  test("seeds sibling entries from a closed PR without freezing discovery", () => {
     const closed: GitHubPullRequestStatus = {
       connected: true,
       fetchedAt: 1_000,
@@ -405,8 +433,12 @@ describe("GitHub PR status stale terminal associations", () => {
     })
 
     useGitHubPrStatusStore.getState().ensureEntry(originKey)
-    expect(useGitHubPrStatusStore.getState().entries[originKey]?.status).toBeNull()
-    expect(useGitHubPrStatusStore.getState().entries[originKey]?.isInitialStatusResolved).toBe(false)
+    const seeded = useGitHubPrStatusStore.getState().entries[originKey]
+    expect(seeded?.status?.pr?.number).toBe(9)
+    // Seeding is display continuity only: the seeded entry has never refreshed
+    // or polled, so its own discovery still runs immediately.
+    expect(seeded?.lastRefreshAt).toBe(0)
+    expect(seeded?.lastDiscoveryPollAt).toBe(0)
   })
 
   test("keeps a cached PR when a forced refresh fails", async () => {
@@ -441,7 +473,7 @@ describe("GitHub PR status stale terminal associations", () => {
     expect(useGitHubPrStatusStore.getState().entries[key]?.error).toBe("GitHub unavailable")
   })
 
-  test("does not persist a merged branch association", () => {
+  test("persists a merged branch association as history", () => {
     const merged: GitHubPullRequestStatus = {
       connected: true,
       fetchedAt: 1_000,
@@ -464,8 +496,8 @@ describe("GitHub PR status stale terminal associations", () => {
 
     const persisted = useGitHubPrStatusStore.persist.getOptions().partialize?.(
       useGitHubPrStatusStore.getState(),
-    ) as { entries?: Record<string, unknown> } | undefined
-    expect(persisted?.entries?.[key]).toBe(undefined)
+    ) as { entries?: Record<string, { status?: GitHubPullRequestStatus | null }> } | undefined
+    expect(persisted?.entries?.[key]?.status?.pr?.number).toBe(12)
   })
 
   test("still persists an open branch association", () => {
@@ -495,7 +527,7 @@ describe("GitHub PR status stale terminal associations", () => {
     expect(persisted?.entries?.[key]?.status?.pr?.number).toBe(15)
   })
 
-  test("hydrate strips a legacy persisted merged PR and marks it unresolved", () => {
+  test("hydrate keeps a persisted merged PR but forces the next discovery poll", () => {
     const key = getGitHubPrStatusKey("/repo", "feature", "origin")
     const hydrated = useGitHubPrStatusStore.persist.getOptions().merge?.(
       {
@@ -511,7 +543,7 @@ describe("GitHub PR status stale terminal associations", () => {
             },
             isInitialStatusResolved: true,
             lastRefreshAt: Date.now(),
-            lastDiscoveryPollAt: 0,
+            lastDiscoveryPollAt: Date.now(),
             identity: {
               runtimeKey: "runtime-a",
               directory: "/repo",
@@ -527,17 +559,19 @@ describe("GitHub PR status stale terminal associations", () => {
       entries: Record<string, {
         status: GitHubPullRequestStatus | null
         isInitialStatusResolved: boolean
+        lastDiscoveryPollAt: number
       }>
     }
 
-    expect(hydrated.entries[key]?.status?.pr).toBeNull()
+    expect(hydrated.entries[key]?.status?.pr?.number).toBe(12)
     expect(hydrated.entries[key]?.status?.repo).toEqual({
       owner: "acme",
       repo: "app",
       url: "https://github.com/acme/app",
     })
-    expect(hydrated.entries[key]?.status?.checks).toBe(undefined)
-    expect(hydrated.entries[key]?.status?.canMerge).toBe(undefined)
-    expect(hydrated.entries[key]?.isInitialStatusResolved).toBe(false)
+    expect(hydrated.entries[key]?.isInitialStatusResolved).toBe(true)
+    // Restored history must not inherit a fresh discovery timestamp, otherwise
+    // a newer open PR would wait a full discovery interval after every reload.
+    expect(hydrated.entries[key]?.lastDiscoveryPollAt).toBe(0)
   })
 })
