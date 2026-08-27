@@ -3,15 +3,13 @@ import type { Part } from '@opencode-ai/sdk/v2';
 type TextLikePart = Part & { text?: string; content?: string };
 type UserTextPart = Part & { text?: string; content?: string; shellAction?: { output?: unknown; command?: unknown } };
 
-const collapseBlankLines = (value: string): string => value.replace(/\n\s*\n+/g, '\n\n');
-
 export const flattenAssistantTextParts = (parts: Part[]): string => {
     const textParts = parts
         .filter((part): part is TextLikePart => part?.type === 'text')
         .map((part) => (part.text || part.content || '').trim())
         .filter((text) => text.length > 0);
 
-    return collapseBlankLines(textParts.join('\n\n'));
+    return textParts.join('\n\n');
 };
 
 export const flattenUserTextParts = (parts: Part[]): string => {
@@ -40,7 +38,7 @@ export const flattenUserTextParts = (parts: Part[]): string => {
     const plainTexts = textParts
         .map((part) => (part.text || part.content || '').trim())
         .filter((text) => text.length > 0);
-    return collapseBlankLines(plainTexts.join('\n\n'));
+    return plainTexts.join('\n\n');
 };
 
 export const suggestPlanTitleFromText = (text: string): string => {

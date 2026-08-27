@@ -117,7 +117,7 @@ describe('copyMarkdownToClipboard', () => {
     const parts = [
       { id: 'p0', sessionID: 's', messageID: 'm', type: 'text', text: '第一段' },
       { id: 'p1', sessionID: 's', messageID: 'm', type: 'text', text: '第二段' },
-      { id: 'p2', sessionID: 's', messageID: 'm', type: 'text', text: '```js\nconsole.log(1)\n```' },
+      { id: 'p2', sessionID: 's', messageID: 'm', type: 'text', text: '```js\nconsole.log(1)\n\n\nconsole.log(2)\n```' },
       { id: 'p3', sessionID: 's', messageID: 'm', type: 'text', text: '第三段' },
     ];
 
@@ -126,7 +126,7 @@ describe('copyMarkdownToClipboard', () => {
     const html = marked.parse(text, { gfm: true, breaks: false }) as string;
     const result = await copyMarkdownToClipboard(text, html);
 
-    const expected = '第一段\n\n第二段\n\n```js\nconsole.log(1)\n```\n\n第三段';
+    const expected = '第一段\n\n第二段\n\n```js\nconsole.log(1)\n\n\nconsole.log(2)\n```\n\n第三段';
     expect(result).toEqual({ ok: true, method: 'clipboard' });
     expect(await writtenItem?.data['text/plain']?.text()).toBe(expected);
     expect(await writtenItem?.data['text/markdown']?.text()).toBe(expected);

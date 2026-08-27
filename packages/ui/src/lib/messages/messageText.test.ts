@@ -57,12 +57,13 @@ describe('flattenAssistantTextParts', () => {
     expect(flattenAssistantTextParts(parts)).toContain('\n\n- item 1\n- item 2');
   });
 
-  test('runs of blank lines collapse to exactly one blank line', () => {
-    expect(flattenAssistantTextParts(makeParts(['a\n\n\n\nb', 'c\n \n \nd']))).toBe('a\n\nb\n\nc\n\nd');
+  test('internal blank-line runs are preserved', () => {
+    const text = 'a\n\n\n\nb\n \n \nd';
+    expect(flattenAssistantTextParts(makeParts([text]))).toBe(text);
   });
 
-  test('a single blank line inside a fenced code block is preserved', () => {
-    const fenced = '```js\na\n\nb\n```';
+  test('multiple blank lines inside a fenced code block are preserved', () => {
+    const fenced = '```js\na\n\n\nb\n```';
     expect(flattenAssistantTextParts(makeParts([fenced]))).toBe(fenced);
   });
 
@@ -92,8 +93,8 @@ describe('flattenAssistantTextParts', () => {
 
 describe('flattenUserTextParts', () => {
   test('plain text parts keep blank-line block separators', () => {
-    const parts = makeUserParts([{ text: '第一段\n\n第二段' }, { text: '下一段' }]);
-    expect(flattenUserTextParts(parts)).toBe('第一段\n\n第二段\n\n下一段');
+    const parts = makeUserParts([{ text: '第一段\n\n\n第二段' }, { text: '下一段' }]);
+    expect(flattenUserTextParts(parts)).toBe('第一段\n\n\n第二段\n\n下一段');
   });
 
   test('shell outputs win over other content and are joined with blank lines', () => {
