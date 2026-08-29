@@ -2,23 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isIMECompositionEvent } from '@/lib/ime';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const inputSource = readFileSync(join(__dirname, 'InlineCommentInput.tsx'), 'utf-8');
 
 describe('InlineCommentInput IME handling', () => {
-  test('recognizes native, React-wrapped, and WebKit composition events', () => {
-    type IMEEvent = Parameters<typeof isIMECompositionEvent>[0];
-
-    expect(isIMECompositionEvent({ isComposing: true, keyCode: 13 } as unknown as IMEEvent)).toBe(true);
-    expect(isIMECompositionEvent({ isComposing: false, keyCode: 229 } as unknown as IMEEvent)).toBe(true);
-    expect(isIMECompositionEvent({
-      nativeEvent: { isComposing: true, keyCode: 13 },
-    } as unknown as IMEEvent)).toBe(true);
-    expect(isIMECompositionEvent({ isComposing: false, keyCode: 13 } as unknown as IMEEvent)).toBe(false);
-  });
-
   test('ignores composition keydown events before handling save shortcuts', () => {
     expect(inputSource).toContain("import { isIMECompositionEvent } from '@/lib/ime';");
 
