@@ -67,6 +67,19 @@ describe('annotation overlay script', () => {
     expect(script).toContain('event.stopPropagation();');
   });
 
+  test('does not attach a comment while IME composition is active', () => {
+    const handlerStart = script.indexOf('var onCommentKeyDown = function (event) {');
+    const handlerEnd = script.indexOf('};', handlerStart);
+    expect(handlerStart).toBeGreaterThan(-1);
+    expect(handlerEnd).toBeGreaterThan(handlerStart);
+
+    const handler = script.slice(handlerStart, handlerEnd);
+    const imeGuard = handler.indexOf('event.isComposing || event.keyCode === 229');
+    const attachCall = handler.indexOf('attach();');
+    expect(imeGuard).toBeGreaterThan(-1);
+    expect(attachCall).toBeGreaterThan(imeGuard);
+  });
+
   test('escapes a label that would otherwise close the script', () => {
     const hostile = buildAnnotationOverlayScript(theme, {
       ...labels,

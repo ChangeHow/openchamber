@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
+import { isIMECompositionEvent } from '@/lib/ime';
 
 export interface InlineCommentInputProps {
   initialText?: string;
@@ -101,6 +102,8 @@ export function InlineCommentInput({
   }, [isMobile]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isIMECompositionEvent(e)) return;
+
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       if (text.trim()) {
