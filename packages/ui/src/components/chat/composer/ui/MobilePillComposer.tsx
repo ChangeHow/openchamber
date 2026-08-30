@@ -2,13 +2,13 @@
  * The collapsed mobile composer.
  *
  * With the keyboard down the composer is a pill: attachments, a one-line
- * preview of the draft, and a mic, with a round new-session button beside it.
+ * preview of the draft, and a mic, with a round contextual action beside it.
  * Tapping anywhere in it expands the real composer and raises the keyboard in
  * the same gesture — which is why the expand handler must run synchronously
  * from the tap rather than from an effect.
  *
- * The new-session button collapses away once a draft is already open, letting
- * the pill grow into its place.
+ * The round action sends when the composer has content. Otherwise it starts a
+ * new session, or collapses away when a new-session draft is already open.
  */
 
 import { Icon } from '@/components/icon/Icon';
@@ -30,10 +30,12 @@ export interface MobilePillComposerProps {
     canAbort: boolean;
     footerIconButtonClass: string;
     iconSizeClass: string;
+    sendIconSizeClass: string;
     stopIconSizeClass: string;
     theme: Theme;
     onExpand: () => void;
     onApplySuggestion: (text: string) => void;
+    onPrimaryAction: () => void;
     onNewSession: () => void;
     onPickLocalFiles: () => void;
     onOpenIssuePicker: () => void;
@@ -57,10 +59,12 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
         canAbort,
         footerIconButtonClass,
         iconSizeClass,
+        sendIconSizeClass,
         stopIconSizeClass,
         theme: currentTheme,
         onExpand,
         onApplySuggestion,
+        onPrimaryAction,
         onNewSession,
         onPickLocalFiles,
         onOpenIssuePicker,
@@ -71,6 +75,7 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
         onStartDictation,
         onAbort,
     } = props;
+    const showSendAction = hasContent && Boolean(currentSessionId || newSessionDraftOpen);
 
     return (
         <div className="flex flex-col">
@@ -160,24 +165,30 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
                     </button>
                 ) : null}
             </div>
-            {/* New-session button: fades/shrinks away when the draft is
-                already open, letting the pill expand into its place. */}
+            {/* With content, sending is more useful than starting another
+                session. An empty new-session draft needs neither action. */}
             <div
                 className={cn(
                     'flex-shrink-0 transition-all duration-200 ease-out',
-                    newSessionDraftOpen ? 'w-0 opacity-0 overflow-hidden' : 'w-11 opacity-100',
+                    newSessionDraftOpen && !showSendAction ? 'w-0 opacity-0 overflow-hidden' : 'w-11 opacity-100',
                 )}
             >
                 <button
                     type="button"
-                    className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-border/80 text-foreground shadow-[0_4px_16px_-4px_rgb(0_0_0_/_0.12)]"
+                    className={cn(
+                        'flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-border/80 shadow-[0_4px_16px_-4px_rgb(0_0_0_/_0.12)]',
+                        showSendAction ? 'text-primary hover:text-primary' : 'text-foreground',
+                    )}
                     style={{ backgroundColor: currentTheme?.colors?.surface?.subtle }}
-                    onClick={onNewSession}
-                    disabled={newSessionDraftOpen}
-                    title={t('mobile.sessions.newChat')}
-                    aria-label={t('mobile.sessions.newChat')}
+                    onClick={showSendAction ? onPrimaryAction : onNewSession}
+                    disabled={newSessionDraftOpen && !showSendAction}
+                    title={t(showSendAction ? 'chat.chatInput.actions.sendMessageAria' : 'mobile.sessions.newChat')}
+                    aria-label={t(showSendAction ? 'chat.chatInput.actions.sendMessageAria' : 'mobile.sessions.newChat')}
                 >
-                    <Icon name="add" className="h-5 w-5 text-current" />
+                    <Icon
+                        name={showSendAction ? 'send-plane-2' : 'add'}
+                        className={cn(showSendAction ? sendIconSizeClass : 'h-5 w-5', 'text-current')}
+                    />
                 </button>
             </div>
         </div>
