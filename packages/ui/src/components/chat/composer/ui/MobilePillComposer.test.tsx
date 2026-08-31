@@ -17,7 +17,7 @@ mock.module('./ComposerAttachmentControls', () => ({
 
 const { MobilePillComposer } = await import('./MobilePillComposer');
 
-const renderPill = (options: { hasContent: boolean; newSessionDraftOpen: boolean }) => renderToStaticMarkup(
+const renderPill = (options: { hasContent: boolean; newSessionDraftOpen: boolean; canAbort?: boolean }) => renderToStaticMarkup(
     <I18nProvider>
         <MobilePillComposer
             message={options.hasContent ? 'Draft message' : ''}
@@ -25,7 +25,7 @@ const renderPill = (options: { hasContent: boolean; newSessionDraftOpen: boolean
             newSessionDraftOpen={options.newSessionDraftOpen}
             hasContent={options.hasContent}
             isVSCode={false}
-            canAbort={false}
+            canAbort={options.canAbort ?? false}
             footerIconButtonClass="icon-button"
             iconSizeClass="icon-size"
             sendIconSizeClass="send-icon-size"
@@ -46,18 +46,28 @@ const renderPill = (options: { hasContent: boolean; newSessionDraftOpen: boolean
 );
 
 describe('MobilePillComposer', () => {
-    test('shows the send action for content in an existing session', () => {
+    test('uses the inline action to send content while the session is idle', () => {
         const markup = renderPill({ hasContent: true, newSessionDraftOpen: false });
 
         expect(markup).toContain('aria-label="Send message"');
-        expect(markup).not.toContain('aria-label="New chat"');
+        expect(markup).toContain('aria-label="New chat"');
+        expect(markup.indexOf('aria-label="Send message"')).toBeLessThan(markup.indexOf('aria-label="New chat"'));
     });
 
-    test('shows the send action for content in a new-session draft', () => {
+    test('uses the trailing action to send content while the session is running', () => {
+        const markup = renderPill({ hasContent: true, newSessionDraftOpen: false, canAbort: true });
+
+        expect(markup).toContain('aria-label="Stop generating"');
+        expect(markup).toContain('aria-label="Send message"');
+        expect(markup).not.toContain('aria-label="New chat"');
+        expect(markup.indexOf('aria-label="Stop generating"')).toBeLessThan(markup.indexOf('aria-label="Send message"'));
+    });
+
+    test('uses the inline send action for content in a new-session draft', () => {
         const markup = renderPill({ hasContent: true, newSessionDraftOpen: true });
 
         expect(markup).toContain('aria-label="Send message"');
-        expect(markup).not.toContain('aria-label="New chat"');
+        expect(markup).toContain('w-0 opacity-0 overflow-hidden');
     });
 
     test('keeps the new-session action for an empty existing session', () => {
@@ -71,6 +81,14 @@ describe('MobilePillComposer', () => {
         const markup = renderPill({ hasContent: false, newSessionDraftOpen: true });
 
         expect(markup).toContain('w-0 opacity-0 overflow-hidden');
+        expect(markup).not.toContain('aria-label="Send message"');
+    });
+
+    test('keeps abort and new-session actions while a session runs without content', () => {
+        const markup = renderPill({ hasContent: false, newSessionDraftOpen: false, canAbort: true });
+
+        expect(markup).toContain('aria-label="Stop generating"');
+        expect(markup).toContain('aria-label="New chat"');
         expect(markup).not.toContain('aria-label="Send message"');
     });
 });

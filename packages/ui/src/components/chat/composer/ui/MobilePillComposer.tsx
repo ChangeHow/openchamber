@@ -7,8 +7,8 @@
  * the same gesture — which is why the expand handler must run synchronously
  * from the tap rather than from an effect.
  *
- * The round action sends when the composer has content. Otherwise it starts a
- * new session, or collapses away when a new-session draft is already open.
+ * With content, the inner end slot sends while the session is idle. While it
+ * is running, abort keeps that slot and the outer new-session action sends.
  */
 
 import { Icon } from '@/components/icon/Icon';
@@ -75,7 +75,8 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
         onStartDictation,
         onAbort,
     } = props;
-    const showSendAction = hasContent && Boolean(currentSessionId || newSessionDraftOpen);
+    const canPrimaryAction = hasContent && Boolean(currentSessionId || newSessionDraftOpen);
+    const showTrailingSendAction = canPrimaryAction && canAbort;
 
     return (
         <div className="flex flex-col">
@@ -163,31 +164,41 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
                     >
                         <StopIcon className={cn(stopIconSizeClass)} />
                     </button>
+                ) : canPrimaryAction ? (
+                    <button
+                        type="button"
+                        className={cn(footerIconButtonClass, 'text-primary hover:text-primary')}
+                        onClick={onPrimaryAction}
+                        title={t('chat.chatInput.actions.sendMessageAria')}
+                        aria-label={t('chat.chatInput.actions.sendMessageAria')}
+                    >
+                        <Icon name="send-plane-2" className={cn(sendIconSizeClass)} />
+                    </button>
                 ) : null}
             </div>
-            {/* With content, sending is more useful than starting another
-                session. An empty new-session draft needs neither action. */}
+            {/* While running, Send moves outside because Abort owns the pill's
+                end slot. An empty new-session draft needs neither action. */}
             <div
                 className={cn(
                     'flex-shrink-0 transition-all duration-200 ease-out',
-                    newSessionDraftOpen && !showSendAction ? 'w-0 opacity-0 overflow-hidden' : 'w-11 opacity-100',
+                    newSessionDraftOpen && !showTrailingSendAction ? 'w-0 opacity-0 overflow-hidden' : 'w-11 opacity-100',
                 )}
             >
                 <button
                     type="button"
                     className={cn(
                         'flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-border/80 shadow-[0_4px_16px_-4px_rgb(0_0_0_/_0.12)]',
-                        showSendAction ? 'text-primary hover:text-primary' : 'text-foreground',
+                        showTrailingSendAction ? 'text-primary hover:text-primary' : 'text-foreground',
                     )}
                     style={{ backgroundColor: currentTheme?.colors?.surface?.subtle }}
-                    onClick={showSendAction ? onPrimaryAction : onNewSession}
-                    disabled={newSessionDraftOpen && !showSendAction}
-                    title={t(showSendAction ? 'chat.chatInput.actions.sendMessageAria' : 'mobile.sessions.newChat')}
-                    aria-label={t(showSendAction ? 'chat.chatInput.actions.sendMessageAria' : 'mobile.sessions.newChat')}
+                    onClick={showTrailingSendAction ? onPrimaryAction : onNewSession}
+                    disabled={newSessionDraftOpen && !showTrailingSendAction}
+                    title={t(showTrailingSendAction ? 'chat.chatInput.actions.sendMessageAria' : 'mobile.sessions.newChat')}
+                    aria-label={t(showTrailingSendAction ? 'chat.chatInput.actions.sendMessageAria' : 'mobile.sessions.newChat')}
                 >
                     <Icon
-                        name={showSendAction ? 'send-plane-2' : 'add'}
-                        className={cn(showSendAction ? sendIconSizeClass : 'h-5 w-5', 'text-current')}
+                        name={showTrailingSendAction ? 'send-plane-2' : 'add'}
+                        className={cn(showTrailingSendAction ? sendIconSizeClass : 'h-5 w-5', 'text-current')}
                     />
                 </button>
             </div>
