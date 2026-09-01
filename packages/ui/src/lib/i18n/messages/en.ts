@@ -1,7 +1,11 @@
 import { settingsDict } from './en.settings';
+import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
+import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict = {
   ...settingsDict,
+  ...linearIssuePickerI18n.en,
+  ...linearPanelI18n.en,
   'terminalView.actions.attachSelection': 'Attach selected output',
   'terminalView.actions.restart': 'Restart terminal',
   'chat.message.terminalContext': '{terminal}, lines {start}-{end}',
@@ -978,6 +982,10 @@ export const dict = {
   'gitView.empty.worktreeFeaturesUnavailable': 'Worktree features are unavailable in this workspace mode.',
   'gitView.empty.worktreeSetupDescription': 'Finishing worktree setup and preparing repository state.',
   'gitView.empty.worktreeSetupInProgress': 'Worktree setup in progress',
+  'gitView.empty.discoveringRepositories': 'Looking for Git repositories...',
+  'gitView.empty.discoverFailed': 'Could not scan for Git repositories',
+  'gitView.empty.retryDiscovery': 'Retry',
+  'gitView.empty.selectRepositoryPlaceholder': 'Select a repository...',
   'worktree.bootstrap.toast.failed': 'Worktree setup failed',
   'worktree.bootstrap.toast.failedDescription': 'The worktree was created, but background setup did not finish.',
   'worktree.bootstrap.toast.timeoutDescription': 'The worktree was created, but background setup timed out.',
@@ -1750,6 +1758,9 @@ export const dict = {
   'header.actions.terminalPanelWithShortcut': 'Terminal panel ({shortcut})',
   'chat.recap.aria': 'Session recap',
   'chat.recap.label': 'Recap:',
+  'chat.sessionError.title': 'OpenCode stopped this reply',
+  'chat.sessionError.noDetails': 'OpenCode reported no details. Open the status report (Ctrl/Cmd+Shift+L) to see recent errors.',
+  'chat.sessionError.noReply': 'OpenCode did not start a reply to this message.',
   'chat.goal.dialog.titleCreate': 'Set Session Goal',
   'chat.goal.dialog.titleManage': 'Session Goal',
   'chat.goal.dialog.objectiveLabel': 'Objective',

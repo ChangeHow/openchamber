@@ -1,8 +1,12 @@
 import type { I18nKey } from './en';
 import { settingsDict } from './ko.settings';
+import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
+import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
   ...settingsDict,
+  ...linearIssuePickerI18n.ko,
+  ...linearPanelI18n.ko,
   'terminalView.actions.attachSelection': '선택한 출력 첨부',
   'terminalView.actions.restart': '터미널 다시 시작',
   'chat.message.terminalContext': '{terminal}, {start}-{end}행',
@@ -979,6 +983,10 @@ export const dict: Record<I18nKey, string> = {
   'gitView.empty.worktreeFeaturesUnavailable': '이 워크스페이스 모드에서는 워크트리 기능을 사용할 수 없습니다.',
   'gitView.empty.worktreeSetupDescription': '워크트리 설정을 마치고 레포지토리 상태를 준비하고 있습니다.',
   'gitView.empty.worktreeSetupInProgress': '워크트리 설정 중',
+  'gitView.empty.discoveringRepositories': 'Git 저장소를 찾는 중...',
+  'gitView.empty.discoverFailed': 'Git 저장소를 검색할 수 없습니다',
+  'gitView.empty.retryDiscovery': '다시 시도',
+  'gitView.empty.selectRepositoryPlaceholder': '저장소 선택...',
   'worktree.bootstrap.toast.failed': '워크트리 설정 실패',
   'worktree.bootstrap.toast.failedDescription': '워크트리는 생성되었지만 백그라운드 설정이 완료되지 않았습니다.',
   'worktree.bootstrap.toast.timeoutDescription': '워크트리는 생성되었지만 백그라운드 설정 시간이 초과되었습니다.',
@@ -1752,6 +1760,9 @@ export const dict: Record<I18nKey, string> = {
   'header.actions.terminalPanelWithShortcut': '터미널 패널 ({shortcut})',
   'chat.recap.aria': '세션 요약',
   'chat.recap.label': '요약:',
+  'chat.sessionError.title': 'OpenCode가 이 응답을 중단했습니다',
+  'chat.sessionError.noDetails': 'OpenCode가 세부 정보를 보고하지 않았습니다. 상태 보고서(Ctrl/Cmd+Shift+L)에서 최근 오류를 확인하세요.',
+  'chat.sessionError.noReply': 'OpenCode가 이 메시지에 대한 응답을 시작하지 않았습니다.',
   'chat.goal.dialog.titleCreate': '세션 목표 설정',
   'chat.goal.dialog.titleManage': '세션 목표',
   'chat.goal.dialog.objectiveLabel': '목표',

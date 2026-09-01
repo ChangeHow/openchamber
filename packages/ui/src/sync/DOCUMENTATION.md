@@ -202,6 +202,22 @@ Rules:
 
 Initial loads use smaller pages on constrained VS Code/mobile surfaces. Prefetch resolves only the initial renderable page; it does not eagerly download older history. The mounted chat timeline requests older pages when its viewport is underfilled or the user scrolls toward history, while mobile uses its explicit load-older action. Timeline caches, pending work, prepend snapshots, and stale checks use runtime + directory + session identity so equal session IDs in different worktrees cannot share lifecycle state. Older pages are fetched through the same loader and merged with optimistic records before publication. The same chronology contract applies in the VS Code webview because it consumes this shared loader and sync store; the extension bridge must transport OpenCode records without introducing its own ID-based ordering.
 
+## Failed-turn diagnostics
+
+A `session.error` event is the only account of a turn OpenCode stopped, and
+it can arrive with no assistant message to attach to. `session-error-log.ts`
+keeps the last 20 of them in memory (`recordSessionError`, fed from the
+event pipeline next to the error notification) and `summarizeOpenCodeError`
+reads the `{ name, data: { message } }` payload. The chat shows the newest
+error for the open session under its last message while that turn is the
+latest one (`SessionErrorNotice`), and also names a user message that an idle
+session has left unanswered for five seconds, since an accepted send that
+produced neither a message nor an error would otherwise look like nothing
+happened. Both buffers — session errors and rejected sends — appear in the
+status report (`buildOpenCodeStatusReport`, Ctrl/Cmd+Shift+L or
+`__opencodeDebug.statusReport()`) together with the managed OpenCode
+process's last error and stderr tail and the expected log file locations.
+
 ## Loading diagnostics
 
 Session loading instrumentation is disabled by default. Set `localStorage.openchamber_session_load_perf` to `"1"`, reproduce the interaction, then inspect `window.__openchamberSessionLoadPerformance.events`.
@@ -447,6 +463,14 @@ finished view; the skeleton appears only when loading takes longer. A session
 the user waited for fades in (100ms); one that was ready appears in the same
 frame. The sidebar prefetches the two rows on either side of the open session
 shortly after it settles, so most neighbouring switches are warm.
+
+The column changes as one. The composer and the status chip above it read
+the session the timeline shows (`components/chat/chatColumnSession.ts`), not
+the live selection: read live, they re-shaped a commit ahead of the swap
+(a taller draft, chips, a working chip) and the outgoing timeline, pinned to
+its end, jumped before it was replaced. The reveal effect below runs once per
+gate for the same reason — `revealWaited` flips for the outgoing session at
+the click, and re-running on it hid that timeline before the next one mounted.
 
 The timeline's first paint for a session is atomic. `ChatContainer` owns a
 `TimelineRevealGate` per session key (`components/chat/timelineRevealGate.ts`):

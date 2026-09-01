@@ -1,8 +1,12 @@
 import type { I18nKey } from './en';
 import { settingsDict } from './zh-TW.settings';
+import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
+import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict: Record<I18nKey, string> = {
   ...settingsDict,
+  ...linearIssuePickerI18n['zh-TW'],
+  ...linearPanelI18n['zh-TW'],
   'terminalView.actions.attachSelection': '附加所選輸出',
   'terminalView.actions.restart': '重新啟動終端',
   'chat.message.terminalContext': '{terminal}，第 {start}-{end} 行',
@@ -991,6 +995,10 @@ export const dict: Record<I18nKey, string> = {
   'gitView.empty.worktreeFeaturesUnavailable': '目前工作區模式下，worktree 功能無法使用。',
   'gitView.empty.worktreeSetupDescription': '正在完成 worktree 設定並準備儲存庫狀態。',
   'gitView.empty.worktreeSetupInProgress': 'worktree 設定進行中',
+  'gitView.empty.discoveringRepositories': '正在尋找 Git 儲存庫...',
+  'gitView.empty.discoverFailed': '無法掃描 Git 儲存庫',
+  'gitView.empty.retryDiscovery': '重試',
+  'gitView.empty.selectRepositoryPlaceholder': '選擇儲存庫...',
   'worktree.bootstrap.toast.failed': 'worktree 設定失敗',
   'worktree.bootstrap.toast.failedDescription': 'worktree 已建立，但背景設定未完成。',
   'worktree.bootstrap.toast.timeoutDescription': 'worktree 已建立，但背景設定逾時。',
@@ -1720,6 +1728,9 @@ export const dict: Record<I18nKey, string> = {
   'header.actions.terminalPanelWithShortcut': '終端機面板（{shortcut}）',
   'chat.recap.aria': '工作階段回顧',
   'chat.recap.label': '回顧：',
+  'chat.sessionError.title': 'OpenCode 停止了本次回覆',
+  'chat.sessionError.noDetails': 'OpenCode 未回報任何詳情。開啟狀態報告（Ctrl/Cmd+Shift+L）查看最近的錯誤。',
+  'chat.sessionError.noReply': 'OpenCode 沒有開始回覆這則訊息。',
   'chat.goal.dialog.titleCreate': '設定工作階段目標',
   'chat.goal.dialog.titleManage': '工作階段目標',
   'chat.goal.dialog.objectiveLabel': '目標',

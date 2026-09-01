@@ -1,7 +1,11 @@
 import { settingsDict } from './de.settings';
+import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
+import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict = {
   ...settingsDict,
+  ...linearIssuePickerI18n.de,
+  ...linearPanelI18n.de,
   'common.language.german': 'Deutsch',
   'common.loading': 'Wird geladen...',
   'common.unavailable': 'Nicht verfügbar',
@@ -875,6 +879,10 @@ export const dict = {
   'gitView.empty.worktreeFeaturesUnavailable': 'Worktree-Funktionen sind in diesem Arbeitsbereichsmodus nicht verfügbar.',
   'gitView.empty.worktreeSetupDescription': 'Arbeitstruktur-Einrichtung wird abgeschlossen und Repository-Zustand wird vorbereitet.',
   'gitView.empty.worktreeSetupInProgress': 'Worktree-Einrichtung läuft',
+  'gitView.empty.discoveringRepositories': 'Suche nach Git-Repositories...',
+  'gitView.empty.discoverFailed': 'Git-Repositories konnten nicht durchsucht werden',
+  'gitView.empty.retryDiscovery': 'Erneut versuchen',
+  'gitView.empty.selectRepositoryPlaceholder': 'Repository auswählen...',
   'worktree.bootstrap.toast.failed': 'Worktree-Einrichtung fehlgeschlagen',
   'worktree.bootstrap.toast.failedDescription': 'Die Worktree wurde erstellt, aber die Hintergrund-Einrichtung wurde nicht abgeschlossen.',
   'worktree.bootstrap.toast.timeoutDescription': 'Die Worktree wurde erstellt, aber die Hintergrund-Einrichtung hat ein Timeout.',
@@ -1553,6 +1561,9 @@ export const dict = {
   'header.actions.terminalPanelWithShortcut': 'Terminalpanel ({shortcut})',
   'chat.recap.aria': 'Sitzungs-Zusammenfassung',
   'chat.recap.label': 'Zusammenfassung:',
+  'chat.sessionError.title': 'OpenCode hat diese Antwort abgebrochen',
+  'chat.sessionError.noDetails': 'OpenCode hat keine Details gemeldet. Öffne den Statusbericht (Strg/Cmd+Umschalt+L), um die letzten Fehler zu sehen.',
+  'chat.sessionError.noReply': 'OpenCode hat keine Antwort auf diese Nachricht begonnen.',
   'chat.goal.dialog.titleCreate': 'Sitzungsziel festlegen',
   'chat.goal.dialog.titleManage': 'Sitzungsziel',
   'chat.goal.dialog.objectiveLabel': 'Ziel',

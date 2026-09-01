@@ -1,7 +1,11 @@
 import { settingsDict } from './fr.settings';
+import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
+import { linearPanelI18n } from './linear-panel.i18n';
 
 export const dict = {
   ...settingsDict,
+  ...linearIssuePickerI18n.fr,
+  ...linearPanelI18n.fr,
   'terminalView.actions.attachSelection': 'Joindre la sortie sélectionnée',
   'terminalView.actions.restart': 'Redémarrer le terminal',
   'chat.message.terminalContext': '{terminal}, lignes {start}-{end}',
@@ -800,6 +804,10 @@ export const dict = {
   'gitView.empty.worktreeFeaturesUnavailable': 'Les fonctionnalités Worktree ne sont pas disponibles dans ce mode d’espace de travail.',
   'gitView.empty.worktreeSetupDescription': 'Termine la configuration du worktree et prépare l\'état du dépôt.',
   'gitView.empty.worktreeSetupInProgress': 'Configuration de worktree en cours',
+  'gitView.empty.discoveringRepositories': 'Recherche des dépôts Git...',
+  'gitView.empty.discoverFailed': 'Impossible d’analyser les dépôts Git',
+  'gitView.empty.retryDiscovery': 'Réessayer',
+  'gitView.empty.selectRepositoryPlaceholder': 'Sélectionnez un dépôt...',
   'gitView.gitmoji.empty': 'Aucun gitmoji trouvé',
   'gitView.gitmoji.searchPlaceholder': 'Rechercher des gitmoji...',
   'gitView.gitmoji.title': 'Insérer un gitmoji',
@@ -1507,6 +1515,9 @@ export const dict = {
   'header.actions.terminalPanelWithShortcut': 'Panneau à bornes ({shortcut})',
   'chat.recap.aria': 'Récapitulatif de la session',
   'chat.recap.label': 'Récap :',
+  'chat.sessionError.title': 'OpenCode a interrompu cette réponse',
+  'chat.sessionError.noDetails': 'OpenCode n\'a fourni aucun détail. Ouvrez le rapport d\'état (Ctrl/Cmd+Maj+L) pour voir les erreurs récentes.',
+  'chat.sessionError.noReply': 'OpenCode n\'a pas commencé de réponse à ce message.',
   'chat.goal.dialog.titleCreate': 'Définir un objectif de session',
   'chat.goal.dialog.titleManage': 'Objectif de session',
   'chat.goal.dialog.objectiveLabel': 'Objectif',
