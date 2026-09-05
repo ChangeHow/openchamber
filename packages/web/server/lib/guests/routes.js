@@ -167,9 +167,12 @@ export const registerGuestRoutes = (app, { openchamberDataDir, openchamberVersio
         if (result.code === 'host-too-old' && result.required) {
           body.required = result.required;
         }
+        if ((result.code === 'id-taken' || result.code === 'already-installed') && result.id) {
+          body.id = result.id;
+        }
         return res.status(status).json(body);
       }
-      res.status(201).json({ guest: result.guest });
+      res.status(result.replaced ? 200 : 201).json({ guest: result.guest });
     } catch (error) {
       console.error('Failed to install guest:', error);
       res.status(500).json({ error: 'Failed to install guest' });

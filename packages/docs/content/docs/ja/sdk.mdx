@@ -36,7 +36,7 @@ HTML はそのファイルを指します。
 
 **フォルダ**インストールは `extensions.json` にパスを残します。Uninstall はカタログ行だけ外します。
 
-**zip**（または https zip / git URL）は OpenChamber のデータ dir の `guests/{id}` にコピーされます。ホストが展開し、マニフェストを確認してそのコピーから動かします。Uninstall はコピーを消します。zip には `package.json`、`panel/index.html`、`panel/main.js`、宣言した `icon.svg` / `agent/main.js` を入れてください。`node_modules` と TypeScript は入れないでください。
+**zip**（または https zip / git URL）は OpenChamber のデータ dir の `extensions/{id}` にコピーされます。ホストが展開し、マニフェストを確認してそのコピーから動かします。Uninstall はコピーを消します。zip には `package.json`、`panel/index.html`、`panel/main.js`、宣言した `icon.svg` / `agent/main.js` を入れてください。`node_modules` と TypeScript は入れないでください。
 
 ## マニフェスト
 

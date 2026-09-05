@@ -28,7 +28,7 @@ bun run --filter @openchamber/sdk bundle -- panel/main.ts panel/main.js
 
 Same flags the host uses in `oc-dev`: `format: 'iife'`, `target: 'browser'`, `minify: true`. Point the HTML at that file.
 
-To ship a zip for Settings → Extensions, put `package.json`, `panel/index.html`, `panel/main.js`, and any declared `icon.svg` / `agent/main.js` at the archive root (or one wrapper folder). Skip `node_modules` and TypeScript sources. The host unpacks into `{dataDir}/guests/{id}` and runs from that copy.
+To ship a zip for Settings → Extensions, put `package.json`, `panel/index.html`, `panel/main.js`, and any declared `icon.svg` / `agent/main.js` at the archive root (or one wrapper folder). Skip `node_modules` and TypeScript sources. The host unpacks into `{dataDir}/extensions/{id}` and runs from that copy.
 
 ## First hole: a rail panel
 
@@ -203,7 +203,7 @@ What exists in code today:
 - `contributes.agent` — optional host-spawned local process. See [GUEST_AGENTS.md](./GUEST_AGENTS.md)
 - `engines.openchamber` — optional `1.22.0` or `>=1.22.0`. Install refuses older hosts with `host-too-old`
 - `connectHost`: theme, locale, directory, session `{ id, title, busy, model?, agent? }`, connection, settings, toast, `openUrl`, `openSurface`, `writeClipboard`, `compose`, `attach` (`kind` issue or pull), `startSession` (same fields plus `worktree`, returns `{ sessionId, sent }`), `prompt` (current session, returns `{ sent }`), `sessionLink` (current session), `onSessionLifecycle` (`started` / `completed` / `failure`), `close`, `oauthStart`, `oauthDisconnect`, `request`, `agentRequest`, `agentStatus`
-- Host hole on web and desktop: `GET /api/guests`, Settings → Extensions (folder, local ZIP, or https git / zip URL, stored per OpenChamber instance), Settings → Integrations, a rail iframe, the composer + menu, and the attach window. Zip and git copies live under `{dataDir}/guests/{id}`. VS Code and mobile mark the catalog unsupported. Ship a classic IIFE with the bundle command above. The packaged app does not compile TypeScript.
+- Host hole on web and desktop: `GET /api/guests`, Settings → Extensions (folder, local ZIP, or https git / zip URL, stored per OpenChamber instance), Settings → Integrations, a rail iframe, the composer + menu, and the attach window. Zip and git copies live under `{dataDir}/extensions/{id}`. VS Code and mobile mark the catalog unsupported. Ship a classic IIFE with the bundle command above. The packaged app does not compile TypeScript.
 - `HostRequestError.code`: `HOST_UNAVAILABLE`, `HOST_TIMEOUT` (20s), `HOST_REJECTED`, `DISCONNECTED`, `DISABLED`, `BAD_PATH`, `NO_INTEGRATION`, `NO_SESSION`, `SESSION_BUSY`, `NO_AGENT`, `AGENT_FAILED`. An unknown wire code becomes `HOST_REJECTED`.
 - `@openchamber/sdk/ui`: `applyHostReady`, `mountIssuePage`, `mountIssueCard`, `mountAttachIssues`, `mountPullRequest`, `mountButton`, `mountTextField`, `mountEmpty`. The guest passes rows. A row may carry `badge` and `subtitle`. The picker can `hasMore`, show one `toggle`, a `session` checkbox, and an `action`. The host does not search.
 

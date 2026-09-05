@@ -19,6 +19,7 @@ const errorSchema = z.object({
     'extract-failed',
   ]),
   required: z.string().trim().min(1).max(64).optional(),
+  id: z.string().trim().min(1).max(128).optional(),
 });
 
 export type InstallGuestErrorCode =
@@ -36,14 +37,14 @@ export type InstallGuestErrorCode =
   | 'failed';
 
 type InstallGuestResult =
-  | { ok: true; guest: InstalledGuest }
-  | { ok: false; code: InstallGuestErrorCode; required?: string };
+  | { ok: true; guest: InstalledGuest; replaced?: boolean }
+  | { ok: false; code: InstallGuestErrorCode; required?: string; id?: string };
 
 type UninstallGuestResult =
   | { ok: true }
   | { ok: false; code: InstallGuestErrorCode };
 
-type InstallGuestRequest = { path: string } | { url: string };
+type InstallGuestRequest = ({ path: string } | { url: string }) & { replace?: boolean };
 
 type ParseInstallInputResult =
   | { ok: true; request: InstallGuestRequest }
@@ -69,14 +70,20 @@ export const parseInstallInput = (raw: string): ParseInstallInputResult => {
 
 const readInstallError = async (
   response: Response,
-): Promise<{ code: InstallGuestErrorCode; required?: string }> => {
+): Promise<{ code: InstallGuestErrorCode; required?: string; id?: string }> => {
   try {
     const parsed = errorSchema.safeParse(JSON.parse(await response.text()));
     if (!parsed.success) {
       return { code: 'failed' };
     }
+    if (parsed.data.error === 'host-too-old' && parsed.data.required && parsed.data.id) {
+      return { code: 'host-too-old', required: parsed.data.required, id: parsed.data.id };
+    }
     if (parsed.data.error === 'host-too-old' && parsed.data.required) {
       return { code: 'host-too-old', required: parsed.data.required };
+    }
+    if (parsed.data.id) {
+      return { code: parsed.data.error, id: parsed.data.id };
     }
     return { code: parsed.data.error };
   } catch {
@@ -84,28 +91,45 @@ const readInstallError = async (
   }
 };
 
-export const installGuest = async (input: string): Promise<InstallGuestResult> => {
+export type InstallGuestOptions = {
+  replace?: boolean;
+};
+
+export const installGuest = async (
+  input: string,
+  options: InstallGuestOptions = {},
+): Promise<InstallGuestResult> => {
   const parsed = parseInstallInput(input);
   if (!parsed.ok) {
     return parsed;
   }
+  const body = options.replace
+    ? { ...parsed.request, replace: true as const }
+    : parsed.request;
   try {
     const response = await runtimeFetch('/api/guests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(parsed.request),
+      body: JSON.stringify(body),
     });
     if (!response.ok) {
       const error = await readInstallError(response);
-      return error.required
-        ? { ok: false, code: error.code, required: error.required }
-        : { ok: false, code: error.code };
+      if (error.required && error.id) {
+        return { ok: false, code: error.code, required: error.required, id: error.id };
+      }
+      if (error.required) {
+        return { ok: false, code: error.code, required: error.required };
+      }
+      if (error.id) {
+        return { ok: false, code: error.code, id: error.id };
+      }
+      return { ok: false, code: error.code };
     }
     const guest = parseInstalledGuestJson(await response.text());
     if (!guest) {
       return { ok: false, code: 'failed' };
     }
-    return { ok: true, guest };
+    return { ok: true, guest, replaced: response.status === 200 };
   } catch {
     return { ok: false, code: 'failed' };
   }

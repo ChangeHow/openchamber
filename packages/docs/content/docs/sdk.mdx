@@ -35,7 +35,7 @@ The rail should show your icon. Click it and your HTML loads. Two panels cannot 
 
 A **folder** install keeps your path in `extensions.json`. Uninstall removes the catalog row only.
 
-A **zip** (or https zip / git URL) is copied into OpenChamber's data dir under `guests/{id}`. The host unpacks the archive, checks the manifest, then runs from that copy. Uninstall deletes the copy. The original zip file stays where you left it. Ship `package.json`, `panel/index.html`, `panel/main.js`, and any `icon.svg` / `agent/main.js` you declared. Do not put `node_modules` or TypeScript sources in the zip. The packaged app will not compile them.
+A **zip** (or https zip / git URL) is copied into OpenChamber's data dir under `extensions/{id}`. The host unpacks the archive, checks the manifest, then runs from that copy. Uninstall deletes the copy. The original zip file stays where you left it. Ship `package.json`, `panel/index.html`, `panel/main.js`, and any `icon.svg` / `agent/main.js` you declared. Do not put `node_modules` or TypeScript sources in the zip. The packaged app will not compile them.
 
 ## Manifest
 

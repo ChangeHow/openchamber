@@ -36,7 +36,8 @@ export const extensionsPersistPath = (dataDir) => {
   return path.join(parsed.data, 'extensions.json');
 };
 
-export const guestCopiesDir = (persistPath) => path.join(path.dirname(persistPath), 'guests');
+/** Host-owned zip/git copies. Lives next to `extensions.json` as `{dataDir}/extensions/{id}`. */
+export const guestCopiesDir = (persistPath) => path.join(path.dirname(persistPath), 'extensions');
 
 const realOrResolved = (value) => {
   try {

@@ -21,6 +21,7 @@ const writeGuest = async (root, id) => {
   await fs.writeFile(path.join(root, 'panel', 'index.html'), '<html></html>');
   await fs.writeFile(path.join(root, 'package.json'), JSON.stringify({
     name: `@openchamber/${id}`,
+    version: '1.0.0',
     openchamber: {
       apiVersion: 1,
       contributes: {
@@ -41,6 +42,10 @@ describe('installGuestFromPath', () => {
     expect(parseInstallRequest({ url: 'https://github.com/acme/panel.git' })).toEqual({
       url: 'https://github.com/acme/panel.git',
     });
+    expect(parseInstallRequest({ path: guestRoot, replace: true })).toEqual({
+      path: guestRoot,
+      replace: true,
+    });
     expect(parseInstallRequest({})).toBeNull();
     expect(parseInstallRequest({ path: guestRoot, url: 'https://github.com/acme/panel.git' })).toBeNull();
 
@@ -56,12 +61,27 @@ describe('installGuestFromPath', () => {
     expect(listed.some((guest) => guest.id === 'clone-hello')).toBe(true);
 
     const again = await installGuestFromPath(guestRoot, persistPath);
-    expect(again).toEqual({ ok: false, code: 'already-installed' });
+    expect(again).toEqual({ ok: false, code: 'already-installed', id: 'clone-hello' });
+
+    const replacedSame = await installGuestFromPath(guestRoot, persistPath, { replace: true });
+    expect(replacedSame.ok).toBe(true);
+    if (!replacedSame.ok) {
+      throw new Error('expected replace');
+    }
+    expect(replacedSame.replaced).toBe(true);
 
     const otherRoot = path.join(dir, 'other');
     await writeGuest(otherRoot, 'clone-hello');
     const taken = await installGuestFromPath(otherRoot, persistPath);
-    expect(taken).toEqual({ ok: false, code: 'id-taken' });
+    expect(taken).toEqual({ ok: false, code: 'id-taken', id: 'clone-hello' });
+
+    const replacedOther = await installGuestFromPath(otherRoot, persistPath, { replace: true });
+    expect(replacedOther.ok).toBe(true);
+    if (!replacedOther.ok) {
+      throw new Error('expected replace other');
+    }
+    expect(replacedOther.replaced).toBe(true);
+    expect(replacedOther.guest.path).toBe(await fs.realpath(otherRoot));
 
     const relative = await installGuestFromPath('clone', persistPath);
     expect(relative).toEqual({ ok: false, code: 'invalid-path' });
@@ -91,6 +111,7 @@ describe('installGuestFromPath', () => {
     await fs.writeFile(path.join(guestRoot, 'panel', 'main.ts'), 'console.log(1)');
     await fs.writeFile(path.join(guestRoot, 'package.json'), JSON.stringify({
       name: '@openchamber/source-only',
+      version: '1.0.0',
       openchamber: {
         apiVersion: 1,
         contributes: {
@@ -111,6 +132,7 @@ describe('installGuestFromPath', () => {
     await fs.writeFile(path.join(guestRoot, 'panel', 'index.html'), '<html></html>');
     await fs.writeFile(path.join(guestRoot, 'package.json'), JSON.stringify({
       name: '@openchamber/future',
+      version: '1.0.0',
       openchamber: {
         apiVersion: 1,
         engines: { openchamber: '>=9.9.9' },
@@ -151,6 +173,7 @@ describe('installGuestFromPath', () => {
     await fs.writeFile(zipPath, buildStoreZip([
       { name: 'package.json', data: JSON.stringify({
         name: '@openchamber/zip-hello',
+        version: '1.0.0',
         openchamber: {
           apiVersion: 1,
           contributes: {

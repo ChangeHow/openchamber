@@ -36,7 +36,7 @@ HTML은 그 파일을 가리킵니다.
 
 **폴더** 설치는 `extensions.json`에 경로를 남깁니다. Uninstall은 카탈로그 행만 제거합니다.
 
-**zip**(또는 https zip / git URL)은 OpenChamber data dir의 `guests/{id}`로 복사됩니다. 호스트가 압축을 풀고 매니페스트를 확인한 뒤 그 복사본으로 실행합니다. Uninstall은 복사본을 삭제합니다. zip에는 `package.json`, `panel/index.html`, `panel/main.js`와 선언한 `icon.svg` / `agent/main.js`만 넣으세요. `node_modules`와 TypeScript는 넣지 마세요.
+**zip**(또는 https zip / git URL)은 OpenChamber data dir의 `extensions/{id}`로 복사됩니다. 호스트가 압축을 풀고 매니페스트를 확인한 뒤 그 복사본으로 실행합니다. Uninstall은 복사본을 삭제합니다. zip에는 `package.json`, `panel/index.html`, `panel/main.js`와 선언한 `icon.svg` / `agent/main.js`만 넣으세요. `node_modules`와 TypeScript는 넣지 마세요.
 
 ## 매니페스트
 

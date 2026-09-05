@@ -73,8 +73,8 @@ describe('extension persist', () => {
       disabledGuests: {},
       agentSocketOverrides: {},
     });
-    expect(guestCopiesDir(file)).toBe(path.join(dir, 'guests'));
-    expect(isCopiedGuestRoot(path.join(dir, 'guests', 'hello'), file)).toBe(true);
+    expect(guestCopiesDir(file)).toBe(path.join(dir, 'extensions'));
+    expect(isCopiedGuestRoot(path.join(dir, 'extensions', 'hello'), file)).toBe(true);
     expect(isCopiedGuestRoot(path.join(dir, 'other', 'hello'), file)).toBe(false);
     await fs.rm(dir, { recursive: true, force: true });
   });

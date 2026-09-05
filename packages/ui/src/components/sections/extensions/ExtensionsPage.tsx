@@ -10,6 +10,14 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { grantGuestAgent, setGuestAgentSocketPath } from '@/lib/guests/agent';
@@ -336,10 +344,52 @@ export const ExtensionsPage: React.FC = () => {
   const unsupported = status === 'unsupported';
   const [installValue, setInstallValue] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const [reinstall, setReinstall] = React.useState<{ input: string; name: string } | null>(null);
 
   React.useEffect(() => {
     void loadGuestCatalog();
   }, []);
+
+  const finishInstall = async (
+    result: Awaited<ReturnType<typeof installGuest>>,
+    input: string,
+    options: { allowConflictDialog?: boolean } = {},
+  ): Promise<boolean> => {
+    if (!result.ok) {
+      if (
+        options.allowConflictDialog !== false
+        && (result.code === 'id-taken' || result.code === 'already-installed')
+      ) {
+        const existing = result.id
+          ? guests.find((guest) => guest.id === result.id)
+          : undefined;
+        setReinstall({
+          input,
+          name: existing?.name ?? result.id ?? input,
+        });
+        return false;
+      }
+      if (result.code === 'host-too-old') {
+        toast.error(
+          result.required
+            ? t('settings.extensions.toast.hostTooOld', { version: result.required })
+            : t('settings.extensions.toast.failed'),
+        );
+      } else {
+        toast.error(t(errorToastKey(result.code)));
+      }
+      return false;
+    }
+    setInstallValue('');
+    setReinstall(null);
+    toast.success(
+      result.replaced
+        ? t('settings.extensions.toast.reinstalled', { name: result.guest.name })
+        : t('settings.extensions.toast.added', { name: result.guest.name }),
+    );
+    await loadGuestCatalog();
+    return true;
+  };
 
   const add = async () => {
     const trimmed = installValue.trim();
@@ -350,21 +400,17 @@ export const ExtensionsPage: React.FC = () => {
     setBusy(true);
     const result = await installGuest(trimmed);
     setBusy(false);
-    if (!result.ok) {
-      if (result.code === 'host-too-old') {
-        toast.error(
-          result.required
-            ? t('settings.extensions.toast.hostTooOld', { version: result.required })
-            : t('settings.extensions.toast.failed'),
-        );
-      } else {
-        toast.error(t(errorToastKey(result.code)));
-      }
+    await finishInstall(result, trimmed);
+  };
+
+  const confirmReinstall = async () => {
+    if (!reinstall) {
       return;
     }
-    setInstallValue('');
-    toast.success(t('settings.extensions.toast.added', { name: result.guest.name }));
-    await loadGuestCatalog();
+    setBusy(true);
+    const result = await installGuest(reinstall.input, { replace: true });
+    setBusy(false);
+    await finishInstall(result, reinstall.input, { allowConflictDialog: false });
   };
 
   const remove = async (id: string, name: string) => {
@@ -487,6 +533,43 @@ export const ExtensionsPage: React.FC = () => {
           </SettingsStackedField>
         </SettingsSection>
       )}
+
+      <Dialog
+        open={reinstall !== null}
+        onOpenChange={(open) => {
+          if (!open && !busy) {
+            setReinstall(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('settings.extensions.dialog.reinstallTitle')}</DialogTitle>
+            <DialogDescription>
+              {t('settings.extensions.dialog.reinstallDescription', {
+                name: reinstall?.name ?? '',
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => setReinstall(null)}
+            >
+              {t('settings.common.actions.cancel')}
+            </Button>
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={() => void confirmReinstall()}
+            >
+              {t('settings.extensions.dialog.reinstall')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SettingsPageLayout>
   );
 };

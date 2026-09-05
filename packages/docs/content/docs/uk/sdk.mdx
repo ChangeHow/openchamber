@@ -35,7 +35,7 @@ bun run --filter @openchamber/sdk bundle -- panel/main.ts panel/main.js
 
 **Тека** лишає ваш шлях у `extensions.json`. Uninstall знімає лише рядок у каталозі.
 
-**Zip** (або https zip / git URL) копіюється в data dir OpenChamber як `guests/{id}`. Хост розпаковує архів, перевіряє маніфест і далі працює з копії. Uninstall видаляє копію. Оригінальний zip лишається на місці. У архіві мають бути `package.json`, `panel/index.html`, `panel/main.js` і задекларовані `icon.svg` / `agent/main.js`. Без `node_modules` і TypeScript — упакований застосунок їх не скомпілює.
+**Zip** (або https zip / git URL) копіюється в data dir OpenChamber як `extensions/{id}`. Хост розпаковує архів, перевіряє маніфест і далі працює з копії. Uninstall видаляє копію. Оригінальний zip лишається на місці. У архіві мають бути `package.json`, `panel/index.html`, `panel/main.js` і задекларовані `icon.svg` / `agent/main.js`. Без `node_modules` і TypeScript — упакований застосунок їх не скомпілює.
 
 ## Маніфест
 

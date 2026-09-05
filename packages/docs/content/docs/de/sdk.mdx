@@ -36,7 +36,7 @@ Auf der Leiste sollte dein Icon erscheinen. Klick drauf, und dein HTML lädt. Zw
 
 Eine **Ordner**-Installation behält deinen Pfad in `extensions.json`. Uninstall entfernt nur den Katalogeintrag.
 
-Ein **Zip** (oder https-Zip / Git-URL) wird nach `guests/{id}` im OpenChamber-Datenverzeichnis kopiert. Der Host entpackt das Archiv, prüft das Manifest und läuft von der Kopie. Uninstall löscht die Kopie. Im Zip: `package.json`, `panel/index.html`, `panel/main.js` und deklarierte `icon.svg` / `agent/main.js`. Kein `node_modules`, kein TypeScript.
+Ein **Zip** (oder https-Zip / Git-URL) wird nach `extensions/{id}` im OpenChamber-Datenverzeichnis kopiert. Der Host entpackt das Archiv, prüft das Manifest und läuft von der Kopie. Uninstall löscht die Kopie. Im Zip: `package.json`, `panel/index.html`, `panel/main.js` und deklarierte `icon.svg` / `agent/main.js`. Kein `node_modules`, kein TypeScript.
 
 ## Manifest
 

@@ -36,7 +36,7 @@ bun run --filter @openchamber/sdk bundle -- panel/main.ts panel/main.js
 
 **文件夹**安装会把路径留在 `extensions.json`。卸载只去掉目录行。
 
-**zip**（或 https zip / git URL）会复制到 OpenChamber data dir 的 `guests/{id}`。主机解压、校验清单，再从该副本运行。卸载会删除副本。zip 里放 `package.json`、`panel/index.html`、`panel/main.js` 以及声明的 `icon.svg` / `agent/main.js`。不要放 `node_modules` 或 TypeScript。
+**zip**（或 https zip / git URL）会复制到 OpenChamber data dir 的 `extensions/{id}`。主机解压、校验清单，再从该副本运行。卸载会删除副本。zip 里放 `package.json`、`panel/index.html`、`panel/main.js` 以及声明的 `icon.svg` / `agent/main.js`。不要放 `node_modules` 或 TypeScript。
 
 ## 清单
 
