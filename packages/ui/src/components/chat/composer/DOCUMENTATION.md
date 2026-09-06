@@ -190,7 +190,11 @@ and the send path reading the same grammar.
   soon as the target changes so a warning never names a previous branch.
 - `ui/DraftTargetSelectors.tsx` owns the controlled project/worktree picker
   state and registers its application shortcuts locally. The selectors only
-  consume their shared prefix while the draft target UI is mounted.
+  consume their shared prefix while the draft target UI is mounted. Keyboard
+  selection returns focus to the current form's composer, including when the
+  selected value is unchanged.
+- `ChatInput.tsx` maps Ctrl+N/P to the active command, skill, snippet, or
+  mention picker after its IME guard.
 
 ## Input recall ownership
 
@@ -247,10 +251,13 @@ suites that install module mocks are order-dependent.
 
 ## Enter preference
 
-`keyboardPolicy.ts` owns the submission decision. Until the Chat setting is
-changed, desktop Enter sends, mobile and focus mode require Ctrl/Cmd+Enter,
-and Shift-modified Enter does not send. An explicit choice applies across
-shared composers; Ctrl/Cmd+Enter sends in either configured mode.
+`keyboardPolicy.ts` owns the submission decision. The expanded desktop composer
+always inserts a newline with Enter, including Shift+Enter, and sends with
+Ctrl/Cmd+Enter; it ignores the Enter-to-send preference. Outside expanded mode,
+until the Chat setting is changed, desktop Enter sends, mobile requires
+Ctrl/Cmd+Enter, and Shift-modified Enter does not send. An explicit choice
+applies across the other shared composers; Ctrl/Cmd+Enter sends in either
+configured mode.
 
 CodeMirror's deferred mobile Enter loses modifier information. Untouched
 settings restore Shift to keep the original policy. Once configured, with mobile

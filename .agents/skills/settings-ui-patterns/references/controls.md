@@ -54,10 +54,19 @@ for text that must stay visible (warnings, dynamic status).
 
 ## Mutually Exclusive Options
 
+Use `SettingsControlGroup` with a short title, a visible `description` directly
+below it, and the option list beneath. Explain scope and exceptions once at
+the group level, not in an info tooltip or repeated in each option. Composer's
+large-text paste and send-shortcut groups use this pattern. Keep ordinary
+boolean toggles as `SettingsCheckboxRow`; two alternative modes use radios,
+not independent checkboxes. Group spacing is defined in `layout.md`.
+
 ```tsx
-<SettingsRadioGroup aria-label={t('...group')}>
-  <SettingsRadioOption selected={…} onSelect={…} label={t('...')} ariaLabel={t('...')} />
-</SettingsRadioGroup>
+<SettingsControlGroup title={t('...group')} description={t('...description')}>
+  <SettingsRadioGroup aria-label={t('...group')}>
+    <SettingsRadioOption selected={…} onSelect={…} label={t('...')} ariaLabel={t('...')} />
+  </SettingsRadioGroup>
+</SettingsControlGroup>
 ```
 
 Skip per-option descriptions when labels are self-explanatory. For short

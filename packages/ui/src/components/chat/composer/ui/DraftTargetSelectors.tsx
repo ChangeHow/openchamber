@@ -138,10 +138,17 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
     const [openPicker, setOpenPicker] = React.useState<'project' | 'worktree' | null>(null);
     const projectTriggerRef = React.useRef<HTMLButtonElement>(null);
     const worktreeTriggerRef = React.useRef<HTMLButtonElement>(null);
+    // Controlled Select closes can omit finalFocus's interaction type.
+    const keyboardCloseRef = React.useRef(false);
+    const getFinalFocus = () => {
+        if (!keyboardCloseRef.current) return true;
+        return projectTriggerRef.current?.closest('form')?.querySelector<HTMLElement>('[data-chat-input="true"] .cm-content');
+    };
     const handlePickerKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
         if (openPicker === null || !shouldDismissDropdown(event)) return;
         event.preventDefault();
         event.stopPropagation();
+        keyboardCloseRef.current = true;
         setOpenPicker(null);
     };
 
@@ -170,7 +177,10 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
             <Select
                 value={selectedProject.id}
                 open={openPicker === 'project'}
-                onOpenChange={(open) => setOpenPicker(open ? 'project' : null)}
+                onOpenChange={(open, details) => {
+                    keyboardCloseRef.current = !open && details.event.type === 'keydown';
+                    setOpenPicker(open ? 'project' : null);
+                }}
                 onValueChange={handleProjectChange}
                 disableGlobalShortcuts
             >
@@ -186,7 +196,7 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
                             : <ProjectLabel project={selectedProject} theme={theme} />}
                     </SelectValue>
                 </SelectTrigger>
-                <SelectContent side="top" collisionAvoidance={{ side: 'none' }} constrainToMain fitContent onKeyDown={handlePickerKeyDown}>
+                <SelectContent side="top" collisionAvoidance={{ side: 'none' }} constrainToMain fitContent onKeyDown={handlePickerKeyDown} finalFocus={getFinalFocus}>
                     {projects.map((project) => (
                         <SelectItem key={project.id} value={project.id} showSelectedBackground={false} className="max-w-[24rem] truncate">
                             <ProjectLabel project={project} theme={theme} />
@@ -199,7 +209,10 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
                 <Select
                     value={selectedDirectory ?? branchItems[0]?.value ?? normalizePath(selectedProject.path) ?? ''}
                     open={openPicker === 'worktree'}
-                    onOpenChange={(open) => setOpenPicker(open ? 'worktree' : null)}
+                    onOpenChange={(open, details) => {
+                        keyboardCloseRef.current = !open && details.event.type === 'keydown';
+                        setOpenPicker(open ? 'worktree' : null);
+                    }}
                     onValueChange={handleDirectoryChange}
                     disableGlobalShortcuts
                 >
@@ -229,7 +242,7 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
                             </TooltipContent>
                         ) : null}
                     </Tooltip>
-                    <SelectContent side="top" collisionAvoidance={{ side: 'none' }} constrainToMain className="w-max min-w-48" onKeyDown={handlePickerKeyDown}>
+                    <SelectContent side="top" collisionAvoidance={{ side: 'none' }} constrainToMain className="w-max min-w-48" onKeyDown={handlePickerKeyDown} finalFocus={getFinalFocus}>
                         {projectRootBranchOption ? (
                             <SelectGroup>
                                 <SelectLabel>{t('chat.chatInput.projectRoot')}</SelectLabel>
