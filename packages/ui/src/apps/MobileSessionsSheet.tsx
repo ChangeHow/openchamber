@@ -35,6 +35,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { DirectoryExplorerDialog } from '@/components/session/DirectoryExplorerDialog';
 import { Icon } from '@/components/icon/Icon';
 import { NewWorktreeDialog } from '@/components/session/NewWorktreeDialog';
+import { CodebaseStatusProvider } from '@/components/session/sidebar/CodebaseStatusProvider';
+import { CodebaseBranchBadge } from '@/components/session/sidebar/CodebaseBranchBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
@@ -1476,7 +1478,11 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   // flex-1 + min-h-0 rather than h-full: both hosts put a fixed-height header
   // above this, so a 100% height overflows by exactly that header — and the
   // clipped overflow swallowed the footer.
+  const codebaseTargets = open ? orderedNodes.flatMap((node) => isProjectExpanded(node) ? node.buckets.flatMap((bucket) => bucket.worktree?.branch
+    ? [{ project: node.project.path, directory: normalizePath(bucket.path) ?? bucket.path, branch: bucket.worktree.branch }]
+    : []) : []) : [];
   const surfaceContent = (
+    <CodebaseStatusProvider targets={codebaseTargets}>
       <div ref={contentRootRef} className="flex min-h-0 flex-1 flex-col">
         <ScrollShadow className="min-h-0 flex-1 overflow-y-auto pb-4">
           {/* The search bar scrolls WITH the list (iOS-style): the open-time
@@ -1813,9 +1819,10 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                                         </button>
                                       )}
                                     >
+                                    <div className="flex min-w-0 items-center">
                                     <button
                                       type="button"
-                                      className="flex min-h-10 w-full items-center gap-2 px-3 py-1 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                                      className="flex min-h-10 min-w-0 flex-1 items-center gap-2 px-3 py-1 text-left transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
                                       onClick={() => {
                                         if (revealedRowId) {
                                           handleRowKeyRevealedChange(revealedRowId, false);
@@ -1857,6 +1864,8 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
                                         {bucket.sessions.length}
                                       </span>
                                     </button>
+                                    <CodebaseBranchBadge directory={normalizePath(bucket.path) ?? bucket.path} branch={bucket.worktree?.branch ?? ''} />
+                                    </div>
                                     </MobileSwipeActionsRow>
                                     {worktreeExpanded
                                       ? renderBucketSessions(`${node.project.id}::${bucket.key}`, bucket, PROJECT_SESSION_INDENT)
@@ -1966,6 +1975,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
           />
         ) : null}
       </div>
+    </CodebaseStatusProvider>
   );
 
   if (variant === 'sidebar') {

@@ -17,6 +17,28 @@ const runtimeCtx = {
 };
 
 describe('settings search', () => {
+  test('finds Codebase PAT settings without hiding GitHub', () => {
+    for (const [query, id] of [['PAT', 'integrations.codebase'], ['github', 'integrations.github']]) {
+      const results = buildSettingsSearchResults({ query, runtimeCtx, t, getPageTitle: (page) => page });
+      expect(results.some((result) => result.id === id)).toBe(true);
+    }
+  });
+
+  test('hides Codebase settings in VS Code', () => {
+    const results = buildSettingsSearchResults({
+      query: 'codebase', runtimeCtx: { ...runtimeCtx, isVSCode: true }, t, getPageTitle: (page) => page,
+    });
+    expect(results.some((result) => result.id === 'integrations.codebase')).toBe(false);
+  });
+
+  test('finds the Codebase third-party package without matching the built-in section', () => {
+    const results = buildSettingsSearchResults({
+      query: '@openchamber-plugin/codebase', runtimeCtx, t, getPageTitle: (page) => page,
+    });
+    expect(results.some((result) => result.id === 'integrations.codebase')).toBe(true);
+    expect(results.some((result) => result.id === 'integrations.first-party')).toBe(false);
+  });
+
   test('finds the Claude Code third-party integration', () => {
     const results = buildSettingsSearchResults({
       query: 'claude',

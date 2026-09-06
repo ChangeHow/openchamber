@@ -1,5 +1,6 @@
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { DraftStarterRef } from '@/lib/draftStarters';
+import type { CodebaseAPI } from '@openchamber-plugin/codebase';
 
 type RuntimePlatform = 'web' | 'desktop' | 'vscode';
 
@@ -1463,6 +1464,7 @@ export interface RuntimeAPIs {
   notifications: NotificationsAPI;
   github?: GitHubAPI;
   linear?: LinearAPI;
+  codebase?: CodebaseAPI;
   push?: PushAPI;
   diagnostics?: DiagnosticsAPI;
   clientAuth?: ClientAuthAPI;

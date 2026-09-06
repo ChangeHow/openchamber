@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { DEFAULT_LOCALE, type Locale } from './runtime';
-import { resetI18nDictionaryCacheForTests, useI18nStore } from './store';
+import { dict as enDict } from './messages/en';
+import { DEFAULT_LOCALE, LOCALES, type Locale } from './runtime';
+import { formatMessage, resetI18nDictionaryCacheForTests, useI18nStore } from './store';
 
 const defaultDictionary = useI18nStore.getState().dictionary;
 
@@ -14,7 +15,7 @@ const resetStore = () => {
 };
 
 const waitForLocaleLoadToSettle = async (locale: Locale) => {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
     if (useI18nStore.getState().loadingLocale !== locale) {
       return;
     }
@@ -50,6 +51,41 @@ describe('i18n store', () => {
       expect(useI18nStore.getState().loadingLocale).toBe('fr');
       await waitForLocaleLoadToSettle('fr');
       expect(useI18nStore.getState().dictionary['common.language.french']).toBe('Français');
+    } finally {
+      resetStore();
+    }
+  });
+
+  test('falls back to the composed english dictionary for a core-only dictionary', () => {
+    expect(formatMessage(enDict, 'codebase.title')).toBe('Codebase merge requests');
+  });
+
+  test('keeps composed messages and placeholders while switching zh-CN and en', async () => {
+    try {
+      useI18nStore.getState().setLocale('zh-CN');
+      await waitForLocaleLoadToSettle('zh-CN');
+      expect(formatMessage(useI18nStore.getState().dictionary, 'codebase.usingMergeRequestBranch', { branch: 'main' }))
+        .toBe('正在使用合并请求分支 main');
+
+      useI18nStore.getState().setLocale('en');
+      expect(formatMessage(useI18nStore.getState().dictionary, 'codebase.usingMergeRequestBranch', { branch: 'main' }))
+        .toBe('Using merge request branch main');
+    } finally {
+      resetStore();
+    }
+  });
+
+  test('keeps the Codebase title localized across every locale switch', async () => {
+    try {
+      for (const locale of LOCALES) {
+        useI18nStore.getState().setLocale(locale);
+        await waitForLocaleLoadToSettle(locale);
+        const title = useI18nStore.getState().dictionary['codebase.title'];
+        expect(title).toBeTruthy();
+        if (locale !== 'en') {
+          expect(title).not.toBe('Codebase merge requests');
+        }
+      }
     } finally {
       resetStore();
     }

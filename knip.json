@@ -82,6 +82,10 @@
         "scripts/**/*.ts"
       ]
     },
+    "packages/integrations/codebase": {
+      "entry": ["src/index.ts", "src/server.ts", "src/web.ts", "src/i18n.ts", "test/**/*.mjs"],
+      "project": ["src/**/*.ts", "test/**/*.mjs"]
+    },
     "packages/mobile": {
       "entry": [
         "scripts/**/*.{js,cjs,mjs,ts}"

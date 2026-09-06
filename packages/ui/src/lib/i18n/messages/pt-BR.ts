@@ -4,7 +4,12 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
 
-export const dict: Record<I18nKey, string> = {
+export const dict = {
+  'session.worktreeAvailability.checking': 'Verificando worktrees...',
+  'session.worktreeAvailability.exists': 'O worktree já existe',
+  'session.worktreeAvailability.failed': 'Não foi possível verificar os worktrees existentes.',
+  'session.worktreeAvailability.unavailable': 'A branch ou o repositório de origem está indisponível.',
+  'session.worktreeAvailability.retry': 'Tentar verificar novamente',
   ...settingsDict,
   ...linearIssuePickerI18n['pt-BR'],
   ...linearPanelI18n['pt-BR'],
@@ -3281,4 +3286,4 @@ export const dict: Record<I18nKey, string> = {
   'settings.mcp.page.connection.kindLink': 'Link',
   'settings.mcp.page.connection.hintCommand': 'Executa nesta máquina. Cole um comando inteiro e ele será dividido em um argumento por linha.',
   'settings.mcp.page.connection.hintLink': 'Conecta a um servidor hospedado por outra pessoa. Cole o endereço https dele.',
-};
+} satisfies Record<I18nKey, string>;

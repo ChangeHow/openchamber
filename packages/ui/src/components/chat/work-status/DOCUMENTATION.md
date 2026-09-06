@@ -108,6 +108,8 @@ which requests only providers enabled for this panel.
 | Pinned messages | `getContextObligatoryMessages` + `state.part` | see below |
 | Todos | live `state.todo[sessionId]`, persisted fallback | live channel wins |
 
+Codebase issue/MR creation uses guest-thread snapshots with provider ID `codebase`. Their rows display the GitLab icon and open the stored Codebase URL. This is stored context, not the sidebar's live open-MR discovery state.
+
 ### Context usage has its own computation, on purpose
 
 `useSessionUIStore.getContextUsage` cannot serve this panel for two reasons:

@@ -4,6 +4,11 @@ import { linearPanelI18n } from './linear-panel.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
 
 export const dict = {
+  'session.worktreeAvailability.checking': 'Checking worktrees...',
+  'session.worktreeAvailability.exists': 'Worktree exists',
+  'session.worktreeAvailability.failed': 'Could not check existing worktrees.',
+  'session.worktreeAvailability.unavailable': 'Source branch or repository is unavailable.',
+  'session.worktreeAvailability.retry': 'Retry worktree check',
   ...settingsDict,
   ...linearIssuePickerI18n.en,
   ...linearPanelI18n.en,

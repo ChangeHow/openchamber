@@ -238,7 +238,9 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
             <img src={entry.authorAvatarUrl} alt="" className="size-4 shrink-0 rounded-full" loading="lazy" />
           ) : (
             <Icon
-              name={entry.kind === 'pull' || (entry.kind === 'guest' && isGuestPull(entry))
+              name={entry.kind === 'guest' && entry.providerId === 'codebase'
+                ? 'gitlab'
+                : entry.kind === 'pull' || (entry.kind === 'guest' && isGuestPull(entry))
                 ? 'git-pull-request'
                 : entry.kind === 'linear'
                   ? 'linear'

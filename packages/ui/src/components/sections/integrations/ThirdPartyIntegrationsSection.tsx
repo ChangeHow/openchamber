@@ -16,6 +16,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useI18n } from '@/lib/i18n';
 import { openExternalUrl } from '@/lib/url';
 import { cn } from '@/lib/utils';
+import { CodebaseSettings } from './CodebaseSettings';
 import {
   usePluginsStore,
   type PluginMutationResult,
@@ -420,6 +421,7 @@ export const ThirdPartyIntegrationsSection: React.FC<ThirdPartyIntegrationsSecti
             {t('settings.integrations.experimentalWarning')}
           </p>
         </div>
+        <CodebaseSettings />
         {THIRD_PARTY_PLUGINS.map(renderPlugin)}
       </SettingsSection>
 

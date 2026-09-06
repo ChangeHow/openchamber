@@ -995,6 +995,14 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
+    id: 'integrations.codebase',
+    page: 'integrations',
+    titleKey: 'settings.integrations.codebase.title',
+    descriptionKey: 'settings.integrations.codebase.description',
+    keywords: ['codebase', '@openchamber-plugin/codebase', 'third-party', 'code.byted.org', 'pat', 'personal access token', 'merge request', 'mr', 'connect'],
+    isAvailable: (ctx) => !ctx.isVSCode,
+  },
+  {
     id: 'integrations.linear',
     page: 'integrations',
     titleKey: 'settings.integrations.linear.title',

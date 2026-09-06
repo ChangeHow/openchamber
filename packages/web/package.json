@@ -15,7 +15,7 @@
     "dev": "bun run build:watch",
     "dev:server": "OPENCHAMBER_RELAY_HOST=${OPENCHAMBER_RELAY_HOST:-off} bun server/index.js --port ${OPENCHAMBER_PORT:-3001}",
     "dev:server:watch": "OPENCHAMBER_RELAY_HOST=${OPENCHAMBER_RELAY_HOST:-off} nodemon --watch server --ext js --exec \"bun server/index.js --port ${OPENCHAMBER_PORT:-3001}\"",
-    "build": "vite build",
+    "build": "bun run --cwd ../integrations/codebase build && vite build",
     "build:watch": "vite build --watch",
     "type-check": "tsc --noEmit",
     "lint": "eslint \"./src/**/*.{ts,tsx}\" --config ../../eslint.config.js",
@@ -25,6 +25,7 @@
   "dependencies": {
     "@clack/prompts": "^1.1.0",
     "@octokit/rest": "^22.0.1",
+    "@openchamber-plugin/codebase": "workspace:*",
     "@openchamber/sdk": "workspace:*",
     "@opencode-ai/sdk": "1.18.25",
     "@simplewebauthn/server": "13.3.1",

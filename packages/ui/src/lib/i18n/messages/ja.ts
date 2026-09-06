@@ -4,7 +4,12 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
 
-export const dict: Record<I18nKey, string> = {
+export const dict = {
+  'session.worktreeAvailability.checking': 'ワークツリーを確認中...',
+  'session.worktreeAvailability.exists': 'ワークツリーが存在します',
+  'session.worktreeAvailability.failed': '既存のワークツリーを確認できませんでした。',
+  'session.worktreeAvailability.unavailable': 'ソースブランチまたはリポジトリを利用できません。',
+  'session.worktreeAvailability.retry': 'ワークツリーの確認を再試行',
   ...settingsDict,
   ...linearIssuePickerI18n.ja,
   ...linearPanelI18n.ja,
@@ -3280,4 +3285,4 @@ export const dict: Record<I18nKey, string> = {
   'settings.mcp.page.connection.kindLink': 'リンク',
   'settings.mcp.page.connection.hintCommand': 'このマシンで実行します。コマンド全体を貼り付けると、1 行に 1 引数へ分割されます。',
   'settings.mcp.page.connection.hintLink': '他者がホストするサーバーに接続します。その https アドレスを貼り付けてください。',
-};
+} satisfies Record<I18nKey, string>;

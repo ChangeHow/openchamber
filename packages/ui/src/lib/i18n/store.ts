@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 
-import { dict as enDict, type I18nKey } from './messages/en';
+import { composeI18nDictionary, type I18nDictionary as ComposedI18nDictionary, type I18nKey } from './composition';
+import { dict as enDict } from './messages/en';
 import { DEFAULT_LOCALE, detectInitialLocale, type Locale, writeStoredLocale } from './runtime';
 
 export type I18nParams = Record<string, string | number | boolean | null | undefined>;
-export type I18nDictionary = Record<I18nKey, string>;
+export type I18nDictionary = ComposedI18nDictionary;
 
 type I18nState = {
   locale: Locale;
@@ -13,11 +14,12 @@ type I18nState = {
   setLocale: (locale: Locale) => void;
 };
 
-const dictionaries = new Map<Locale, I18nDictionary>([[DEFAULT_LOCALE, enDict]]);
+const defaultDictionary = composeI18nDictionary(DEFAULT_LOCALE, enDict);
+const dictionaries = new Map<Locale, I18nDictionary>([[DEFAULT_LOCALE, defaultDictionary]]);
 
 export function resetI18nDictionaryCacheForTests(): void {
   dictionaries.clear();
-  dictionaries.set(DEFAULT_LOCALE, enDict);
+  dictionaries.set(DEFAULT_LOCALE, defaultDictionary);
 }
 
 async function loadDictionary(locale: Locale): Promise<I18nDictionary> {
@@ -26,36 +28,37 @@ async function loadDictionary(locale: Locale): Promise<I18nDictionary> {
     return cached;
   }
 
-  const mod = locale === 'zh-CN'
-    ? await import('./messages/zh-CN') as { dict: I18nDictionary }
+  const coreDictionary = locale === 'zh-CN'
+    ? (await import('./messages/zh-CN')).dict
     : locale === 'fr'
-      ? await import('./messages/fr') as { dict: I18nDictionary }
-    : locale === 'zh-TW'
-      ? await import('./messages/zh-TW') as { dict: I18nDictionary }
-      : locale === 'es'
-        ? await import('./messages/es') as { dict: I18nDictionary }
-        : locale === 'pt-BR'
-          ? await import('./messages/pt-BR') as { dict: I18nDictionary }
-          : locale === 'uk'
-            ? await import('./messages/uk') as { dict: I18nDictionary }
-            : locale === 'ko'
-              ? await import('./messages/ko') as { dict: I18nDictionary }
-              : locale === 'pl'
-                ? await import('./messages/pl') as { dict: I18nDictionary }
-                : locale === 'de'
-                  ? await import('./messages/de') as { dict: I18nDictionary }
-                  : locale === 'ja'
-                    ? await import('./messages/ja') as { dict: I18nDictionary }
-                    : locale === 'tr'
-                      ? await import('./messages/tr') as { dict: I18nDictionary }
-                      : { dict: enDict };
-  dictionaries.set(locale, mod.dict);
-  return mod.dict;
+      ? (await import('./messages/fr')).dict
+      : locale === 'zh-TW'
+        ? (await import('./messages/zh-TW')).dict
+        : locale === 'es'
+          ? (await import('./messages/es')).dict
+          : locale === 'pt-BR'
+            ? (await import('./messages/pt-BR')).dict
+            : locale === 'uk'
+              ? (await import('./messages/uk')).dict
+              : locale === 'ko'
+                ? (await import('./messages/ko')).dict
+                : locale === 'pl'
+                  ? (await import('./messages/pl')).dict
+                  : locale === 'de'
+                    ? (await import('./messages/de')).dict
+                    : locale === 'ja'
+                      ? (await import('./messages/ja')).dict
+                      : locale === 'tr'
+                        ? (await import('./messages/tr')).dict
+                        : enDict;
+  const dictionary = composeI18nDictionary(locale, coreDictionary);
+  dictionaries.set(locale, dictionary);
+  return dictionary;
 }
 
 export const useI18nStore = create<I18nState>()((set, get) => ({
   locale: DEFAULT_LOCALE,
-  dictionary: enDict,
+  dictionary: defaultDictionary,
   loadingLocale: null,
   setLocale: (locale) => {
     const current = get();
@@ -84,7 +87,7 @@ export const useI18nStore = create<I18nState>()((set, get) => ({
     }).catch((error) => {
       console.error(`[i18n] failed to load locale ${locale}`, error);
       if (get().locale === locale) {
-        set({ dictionary: enDict, loadingLocale: null });
+        set({ dictionary: defaultDictionary, loadingLocale: null });
       }
     });
   },
@@ -94,8 +97,12 @@ export function initializeLocale(): void {
   useI18nStore.getState().setLocale(detectInitialLocale());
 }
 
-export function formatMessage(dictionary: I18nDictionary, key: I18nKey, params?: I18nParams): string {
-  const template = dictionary[key] ?? enDict[key] ?? key;
+export function formatMessage(
+  dictionary: Partial<I18nDictionary>,
+  key: I18nKey,
+  params?: I18nParams,
+): string {
+  const template = dictionary[key] ?? defaultDictionary[key] ?? key;
   if (!params) {
     return template;
   }

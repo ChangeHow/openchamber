@@ -1078,7 +1078,7 @@ export async function getRemoteUrl(directory: string, remote?: string): Promise<
   }
   const response = await runtimeFetch(buildUrl(`${API_BASE}/remote-url`, directory, { remote }));
   if (!response.ok) {
-    return null;
+    throw new Error(`Failed to get remote URL: ${response.statusText}`);
   }
   const data = await response.json();
   return data.url ?? null;

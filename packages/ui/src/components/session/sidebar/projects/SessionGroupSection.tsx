@@ -36,6 +36,7 @@ import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 
 type FolderScope = { scopeKey: string; directory: string | null };
 import { getGitHubPrStatusKey, usePrVisualSummary } from '@/stores/useGitHubPrStatusStore';
+import { codebaseBranchKey, CodebaseStatusContext } from '../codebase-status-context';
 import { useI18n } from '@/lib/i18n';
 import { useChildStoreManager } from '@/sync/sync-context';
 import { canRequestNativeDirectoryAccess, requestDirectoryAccess } from '@/lib/desktop';
@@ -325,7 +326,10 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
     return directory && branch ? getGitHubPrStatusKey(directory, branch) : null;
   }, [group.branch, group.directory, group.isArchivedBucket, group.isMain, hideGroupLabel]);
   const groupPrSummary = usePrVisualSummary(groupPrKey);
-  const groupPrColor = groupPrSummary ? `var(--pr-${groupPrSummary.visualState})` : undefined;
+  const codebaseStatus = React.useContext(CodebaseStatusContext);
+  const codebaseLink = codebaseStatus.entries.get(codebaseBranchKey(normalizePath(group.directory ?? null) ?? '', group.branch?.trim() ?? ''));
+  const mr = codebaseLink?.mergeRequest;
+  const groupPrColor = mr ? `var(--pr-${mr.draft ? 'draft' : 'open'})` : groupPrSummary ? `var(--pr-${groupPrSummary.visualState})` : undefined;
   const childStores = useChildStoreManager();
   const bootstrapDirectories = React.useMemo(() => {
     const directories = group.folderScopes?.map((scope) => normalizePath(scope.directory))
@@ -1168,13 +1172,25 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
                     {renderHighlightedText(group.label, normalizedSessionSearchQuery)}
                   </span>
                   {groupActivityIndicator}
-                  {groupPrSummary ? (
+                  {mr ? (
+                    <a href={mr.url} target="_blank" rel="noopener noreferrer" title={mr.title}
+                      className="ml-auto shrink-0 typography-micro font-medium" style={{ color: groupPrColor }}
+                      onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                      !{mr.number}
+                    </a>
+                  ) : groupPrSummary ? (
                     <span
                       className="ml-auto flex-shrink-0 text-[0.72rem] font-medium leading-none"
                       style={groupPrColor ? { color: groupPrColor } : undefined}
                     >
                       #{groupPrSummary.number}
                     </span>
+                  ) : null}
+                  {codebaseLink?.failed ? (
+                    <Button variant="ghost" size="xs" title={t('codebase.error.lookup')} aria-label={t('codebase.error.lookup')}
+                      onClick={(event) => { event.stopPropagation(); codebaseStatus.refresh(); }} onKeyDown={(event) => event.stopPropagation()}>
+                      <Icon name="error-warning" className="size-3 text-status-warning" />
+                    </Button>
                   ) : null}
                 </span>
               ) : (

@@ -33,6 +33,7 @@ import { formatProjectLabel, formatSessionCompactDateLabel, formatSessionDateLab
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { getGitHubPrStatusKey, usePrVisualSummary } from '@/stores/useGitHubPrStatusStore';
+import { codebaseBranchKey, CodebaseStatusContext } from '../codebase-status-context';
 import { useSessionUnseenCount } from '@/sync/notification-store';
 import { useHasSessionActivityDuration } from '@/sync/session-activity-timing';
 import { SessionActivityDuration } from '@/components/session/SessionActivityDuration';
@@ -371,7 +372,9 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
     return branch && directory ? getGitHubPrStatusKey(directory, branch) : null;
   }, [isVSCode, node.worktree]);
   const prSummary = usePrVisualSummary(prLookupKey);
-  const prIconColor = prSummary ? `var(--pr-${prSummary.visualState})` : undefined;
+  const codebaseStatus = React.useContext(CodebaseStatusContext);
+  const codebaseMr = codebaseStatus.entries.get(codebaseBranchKey(normalizePath(node.worktree?.path ?? null) ?? '', node.worktree?.branch?.trim() ?? ''))?.mergeRequest;
+  const prIconColor = codebaseMr ? `var(--pr-${codebaseMr.draft ? 'draft' : 'open'})` : prSummary ? `var(--pr-${prSummary.visualState})` : undefined;
   const sessionGroupingMode = useSessionDisplayStore((state) => state.sessionGroupingMode);
   // In by-worktree grouping the project tree already shows the branch on the
   // group sub-header, so the per-row marker only appears in flat mode and in
@@ -1501,7 +1504,13 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
                         <span className="min-w-0 truncate">{tooltipBranchLabel}</span>
                       </div>
                     ) : null}
-                    {prSummary && prStatusLabel ? (
+                    {codebaseMr ? (
+                      <a href={codebaseMr.url} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-1.5"
+                        onClick={(event) => event.stopPropagation()}>
+                        <Icon name="gitlab" className="size-3 shrink-0" style={{ color: prIconColor }} />
+                        <span className="truncate" style={{ color: prIconColor }}>!{codebaseMr.number} · {codebaseMr.title}</span>
+                      </a>
+                    ) : prSummary && prStatusLabel ? (
                       <div className="flex min-w-0 items-center gap-1.5">
                         <Icon name="git-pull-request" className="h-3 w-3 flex-shrink-0" style={prIconColor ? { color: prIconColor } : undefined} />
                         <span className="min-w-0 truncate" style={prIconColor ? { color: prIconColor } : undefined}>

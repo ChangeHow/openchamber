@@ -4,7 +4,12 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
 
-export const dict: Record<I18nKey, string> = {
+export const dict = {
+  'session.worktreeAvailability.checking': '正在檢查工作樹...',
+  'session.worktreeAvailability.exists': '工作樹已存在',
+  'session.worktreeAvailability.failed': '無法檢查既有工作樹。',
+  'session.worktreeAvailability.unavailable': '來源分支或儲存庫無法使用。',
+  'session.worktreeAvailability.retry': '重新檢查工作樹',
   ...settingsDict,
   ...linearIssuePickerI18n['zh-TW'],
   ...linearPanelI18n['zh-TW'],
@@ -3280,4 +3285,4 @@ export const dict: Record<I18nKey, string> = {
   'settings.mcp.page.connection.kindLink': '連結',
   'settings.mcp.page.connection.hintCommand': '在本機執行。貼上完整指令後會依每行一個參數拆分。',
   'settings.mcp.page.connection.hintLink': '連線到他人代管的伺服器。貼上其 https 位址。',
-};
+} satisfies Record<I18nKey, string>;

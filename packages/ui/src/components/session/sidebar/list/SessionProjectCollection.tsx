@@ -4,6 +4,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { usePrefetchSessionMessages } from '@/sync/use-sync';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
+import { CodebaseStatusProvider } from '../CodebaseStatusProvider';
 import { getGitHubPrStatusKey, useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { SessionTreeItemProps } from '../sessions/SessionTreeItem';
@@ -617,7 +618,14 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
     scrollerActions.renderProjectStatusIndicator,
     setSingleProjectId,
   ]);
-  return <>
+  const codebaseTargets = projectSections.flatMap((section) => projectView.collapsedProjects.has(section.project.id) ? [] : section.groups.flatMap((group) => {
+    const directory = normalizePath(group.directory ?? null);
+    const branch = group.branch?.trim() || topology.gitBranches.get(directory || '')?.trim();
+    return !group.isArchivedBucket && directory && branch
+      ? [{ project: section.project.path, directory, branch }]
+      : [];
+  }));
+  return <CodebaseStatusProvider targets={codebaseTargets}>
     <ProjectSessionSelectionEffect
       projectSections={projectSections}
       activeProjectId={view.activeProjectId}
@@ -640,7 +648,7 @@ const VisibleSessionProjects: React.FC<SessionProjectCollectionProps> = ({ topol
       isInlineEditing={editingId !== null}
       startFolderRename={startFolderRename}
     />
-  </>;
+  </CodebaseStatusProvider>;
 };
 
 export const SessionProjectCollection: React.FC<SessionProjectCollectionProps> = (props) => props.view.isVisible ? <VisibleSessionProjects {...props} /> : null;

@@ -4,6 +4,11 @@ import { linearPanelI18n } from './linear-panel.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
 
 export const dict = {
+  'session.worktreeAvailability.checking': 'Çalışma ağaçları denetleniyor...',
+  'session.worktreeAvailability.exists': 'Çalışma ağacı zaten var',
+  'session.worktreeAvailability.failed': 'Mevcut çalışma ağaçları denetlenemedi.',
+  'session.worktreeAvailability.unavailable': 'Kaynak dal veya depo kullanılamıyor.',
+  'session.worktreeAvailability.retry': 'Çalışma ağacı denetimini yinele',
   ...settingsDict,
   ...linearIssuePickerI18n.tr,
   ...linearPanelI18n.tr,

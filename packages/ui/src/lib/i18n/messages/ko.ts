@@ -4,7 +4,12 @@ import { linearIssuePickerI18n } from './linear-issue-picker.i18n';
 import { linearPanelI18n } from './linear-panel.i18n';
 import { pluginPanelI18n } from './plugin-panel.i18n';
 
-export const dict: Record<I18nKey, string> = {
+export const dict = {
+  'session.worktreeAvailability.checking': '워크트리 확인 중...',
+  'session.worktreeAvailability.exists': '워크트리가 이미 있습니다',
+  'session.worktreeAvailability.failed': '기존 워크트리를 확인하지 못했습니다.',
+  'session.worktreeAvailability.unavailable': '소스 브랜치 또는 저장소를 사용할 수 없습니다.',
+  'session.worktreeAvailability.retry': '워크트리 확인 다시 시도',
   ...settingsDict,
   ...linearIssuePickerI18n.ko,
   ...linearPanelI18n.ko,
@@ -3280,4 +3285,4 @@ export const dict: Record<I18nKey, string> = {
   'settings.mcp.page.connection.kindLink': '링크',
   'settings.mcp.page.connection.hintCommand': '이 컴퓨터에서 실행됩니다. 명령 전체를 붙여넣으면 한 줄에 인수 하나씩 나뉩니다.',
   'settings.mcp.page.connection.hintLink': '다른 곳에서 호스팅하는 서버에 연결합니다. https 주소를 붙여넣으세요.',
-};
+} satisfies Record<I18nKey, string>;

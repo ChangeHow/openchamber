@@ -14,7 +14,9 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
-import { validateWorktreeCreate } from '@/lib/worktrees/worktreeManager';
+import { useWorktreeAvailability } from '@/hooks/useWorktreeAvailability';
+import { githubWorktreeAdapter } from '@/lib/integrations/github';
+import { WorktreeAvailabilityLabel } from './WorktreeAvailabilityLabel';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { Icon } from "@/components/icon/Icon";
@@ -24,7 +26,6 @@ import type {
   GitHubIssueSummary,
   GitHubPullRequestSummary,
 } from '@/lib/api/types';
-import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
 import { useI18n } from '@/lib/i18n';
 
 type GitHubTab = 'issues' | 'prs';
@@ -37,11 +38,6 @@ interface GitHubIntegrationDialogProps {
     item: GitHubIssue | GitHubPullRequestSummary;
     includeDiff?: boolean;
   } | null) => void;
-}
-
-interface ValidationResult {
-  isValid: boolean;
-  error: string | null;
 }
 
 export function GitHubIntegrationDialog({
@@ -59,12 +55,6 @@ export function GitHubIntegrationDialog({
   const activeProject = useProjectsStore((state) => state.getActiveProject());
   
   const projectDirectory = activeProject?.path ?? null;
-  const projectRef: ProjectRef | null = React.useMemo(() => {
-    if (projectDirectory && activeProject) {
-      return { id: activeProject.id, path: projectDirectory };
-    }
-    return null;
-  }, [activeProject, projectDirectory]);
 
   // State
   const [activeTab, setActiveTab] = React.useState<GitHubTab>('issues');
@@ -77,11 +67,11 @@ export function GitHubIntegrationDialog({
   const [selectedIssue, setSelectedIssue] = React.useState<GitHubIssue | null>(null);
   const [selectedPr, setSelectedPr] = React.useState<GitHubPullRequestSummary | null>(null);
   const [includeDiff, setIncludeDiff] = React.useState(false);
-  const [validations, setValidations] = React.useState<Map<string, ValidationResult>>(new Map());
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(false);
 
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 350);
+  const worktreeAvailability = useWorktreeAvailability(open && activeTab === 'prs', projectDirectory, githubWorktreeAdapter);
 
   const loadData = React.useCallback(async (query?: string) => {
     if (!projectDirectory || !github) return;
@@ -228,7 +218,6 @@ export function GitHubIntegrationDialog({
       setSelectedPr(null);
       setIncludeDiff(false);
       setError(null);
-      setValidations(new Map());
       setPage(1);
       setHasMore(false);
       return;
@@ -236,49 +225,6 @@ export function GitHubIntegrationDialog({
     
     void loadData();
   }, [open, loadData]);
-
-  // Validate branches for worktree creation
-  const validateBranch = React.useCallback(async (branchName: string) => {
-    if (!projectRef || !branchName) return;
-    
-    // Check cache first
-    if (validations.has(branchName)) return;
-    
-    try {
-      const result = await validateWorktreeCreate(projectRef, {
-        mode: 'new',
-        branchName,
-        worktreeName: branchName,
-      });
-      
-      const blockingError = result.errors.find((entry) => entry.code === 'branch_in_use');
-      
-      setValidations(prev => new Map(prev).set(branchName, {
-        isValid: !blockingError,
-        error: blockingError
-          ? t(blockingError.code === 'branch_exists'
-            ? 'session.githubIntegration.validation.branchAlreadyExists'
-            : 'session.githubIntegration.validation.branchAlreadyCheckedOut')
-          : null,
-      }));
-    } catch {
-      setValidations(prev => new Map(prev).set(branchName, {
-        isValid: false,
-        error: t('session.githubIntegration.validation.failed'),
-      }));
-    }
-  }, [projectRef, validations, t]);
-
-  // Validate PR branches when loaded
-  React.useEffect(() => {
-    if (!open || activeTab !== 'prs') return;
-    
-    prs.forEach(pr => {
-      if (pr.head) {
-        void validateBranch(pr.head);
-      }
-    });
-  }, [open, activeTab, prs, validateBranch]);
 
   // GitHub connection check
   const isGitHubConnected = githubAuthChecked && githubAuthStatus?.connected === true;
@@ -306,6 +252,7 @@ export function GitHubIntegrationDialog({
         item: selectedIssue,
       });
     } else if (selectedPr) {
+      if (worktreeAvailability.getAvailability(selectedPr).status !== 'available') return;
       onSelect({
         type: 'pr',
         item: selectedPr,
@@ -322,13 +269,11 @@ export function GitHubIntegrationDialog({
   };
 
   // Check if selection is valid
-  const canConfirm = selectedIssue || (selectedPr && validations.get(selectedPr.head ?? '')?.isValid !== false);
+  const canConfirm = selectedIssue || (selectedPr && worktreeAvailability.getAvailability(selectedPr).status === 'available');
 
   // Check if PR is blocked
   const isPrBlocked = (pr: GitHubPullRequestSummary): boolean => {
-    if (!pr.head) return true;
-    const validation = validations.get(pr.head);
-    return validation?.isValid === false;
+    return worktreeAvailability.getAvailability(pr).status !== 'available';
   };
 
   // Content for the dialog (shared between mobile and desktop)
@@ -437,10 +382,11 @@ export function GitHubIntegrationDialog({
               {/* PRs List */}
               {!loading && !error && activeTab === 'prs' && (
                 <div className="space-y-0.5 min-h-full">
+                  {worktreeAvailability.failed ? <Button variant="outline" size="sm" onClick={worktreeAvailability.refresh}>{t('session.worktreeAvailability.retry')}</Button> : null}
                   {prs.length > 0 ? (
                     prs.map(pr => {
                       const blocked = isPrBlocked(pr);
-                      const validation = pr.head ? validations.get(pr.head) : undefined;
+                      const availability = worktreeAvailability.getAvailability(pr);
                       
                       return (
                         <button
@@ -469,12 +415,8 @@ export function GitHubIntegrationDialog({
                                     {pr.sourceRepo.owner}/{pr.sourceRepo.repo}
                                   </span>
                                 ) : null}
-                                {blocked && validation?.error && (
-                                  <span className="typography-micro text-destructive">
-                                    {validation.error}
-                                  </span>
-                                )}
                               </div>
+                              <WorktreeAvailabilityLabel availability={availability} />
                             </div>
                           </div>
                         </button>

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import type { AttachIssueRequest } from '@openchamber/sdk';
+import type { CodebaseIssue, CodebaseMergeRequest } from '@openchamber-plugin/codebase';
 import {
   Dialog,
   DialogContent,
@@ -57,6 +58,7 @@ import {
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitBranches, useGitStore, useGitLoadingBranches } from '@/stores/useGitStore';
 import { GitHubIntegrationDialog } from './GitHubIntegrationDialog';
+import { CodebaseMergeRequestPickerDialog } from './CodebaseMergeRequestPickerDialog';
 import { LinearIssuePickerDialog } from './LinearIssuePickerDialog';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
@@ -72,6 +74,9 @@ import type {
 } from '@/lib/api/types';
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
 import { useI18n } from '@/lib/i18n';
+import { subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
+import { getWorktreeMergeRequestProvider } from '@/lib/worktrees/worktreeMergeRequest';
+import { codebaseWorktreeAttachment, resolveCodebaseMergeRequestWorktreeConfig } from '@/lib/integrations/codebase';
 
 type Mode = 'new-branch' | 'existing-branch';
 
@@ -97,6 +102,8 @@ interface NewBranchState {
   sourceBranch: string;
   linkedIssue: GitHubIssue | null;
   linkedPr: GitHubPullRequestSummary | null;
+  linkedCodebaseMergeRequest: CodebaseMergeRequest | null;
+  codebaseWorktreeConfig: ReturnType<typeof resolveCodebaseMergeRequestWorktreeConfig> | null;
   linkedLinearIssue: LinkedLinearWorktreeIssue | null;
   linkedGuest: AttachIssueRequest | null;
   includePrDiff: boolean;
@@ -245,7 +252,7 @@ export function NewWorktreeDialog({
   onWorktreeCreated,
 }: NewWorktreeDialogProps) {
   const { t } = useI18n();
-  const { github, git, linear } = useRuntimeAPIs();
+  const { github, git, linear, codebase } = useRuntimeAPIs();
   const isMobile = useUIStore((state) => state.isMobile);
   const githubAuthStatus = useGitHubAuthStore((state) => state.status);
   const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
@@ -278,6 +285,8 @@ export function NewWorktreeDialog({
     sourceBranch: '',
     linkedIssue: null,
     linkedPr: null,
+    linkedCodebaseMergeRequest: null,
+    codebaseWorktreeConfig: null,
     linkedLinearIssue: null,
     linkedGuest: null,
     includePrDiff: false,
@@ -330,7 +339,13 @@ export function NewWorktreeDialog({
   }, [existingWorktreeNames]);
   
   const [githubDialogOpen, setGithubDialogOpen] = React.useState(false);
+  const [codebaseDialogOpen, setCodebaseDialogOpen] = React.useState(false);
   const [linearDialogOpen, setLinearDialogOpen] = React.useState(false);
+  const [mergeRequestProvider, setMergeRequestProvider] = React.useState<'github' | 'codebase' | null>(null);
+  const codebaseSelectionRequestRef = React.useRef(0);
+  const providerResolutionRequestRef = React.useRef(0);
+  const [providerResolutionEpoch, setProviderResolutionEpoch] = React.useState(0);
+  const [isSelectingCodebaseMergeRequest, setIsSelectingCodebaseMergeRequest] = React.useState(false);
   
   // Desktop branch picker states
   const [existingBranchDropdownOpen, setExistingBranchDropdownOpen] = React.useState(false);
@@ -415,6 +430,60 @@ export function NewWorktreeDialog({
     if (branches?.all) return;
     void fetchBranches(projectDirectory, git);
   }, [open, projectDirectory, git, branches?.all, fetchBranches]);
+
+  React.useEffect(() => {
+    if (!open || !projectDirectory || !git?.getRemoteUrl) {
+      setMergeRequestProvider(null);
+      return;
+    }
+    const requestId = ++providerResolutionRequestRef.current;
+    setMergeRequestProvider(null);
+    void git.getRemoteUrl(projectDirectory)
+      .then((remoteUrl) => {
+        if (requestId === providerResolutionRequestRef.current) {
+          setMergeRequestProvider(getWorktreeMergeRequestProvider(remoteUrl));
+        }
+      })
+      .catch(() => {
+        if (requestId === providerResolutionRequestRef.current) setMergeRequestProvider(null);
+      });
+    return () => { providerResolutionRequestRef.current += 1; };
+  }, [open, projectDirectory, git, providerResolutionEpoch]);
+
+  React.useEffect(() => {
+    codebaseSelectionRequestRef.current += 1;
+    setIsSelectingCodebaseMergeRequest(false);
+    setNewBranchState((prev) => prev.linkedCodebaseMergeRequest || prev.linkedGuest?.providerId === 'codebase'
+      ? {
+        ...prev,
+        linkedCodebaseMergeRequest: null,
+        codebaseWorktreeConfig: null,
+        linkedGuest: null,
+      }
+      : prev);
+  }, [projectDirectory, git]);
+
+  React.useEffect(() => {
+    return subscribeRuntimeEndpointWillChange(() => {
+      codebaseSelectionRequestRef.current += 1;
+      providerResolutionRequestRef.current += 1;
+      setIsSelectingCodebaseMergeRequest(false);
+      setMergeRequestProvider(null);
+      setCodebaseDialogOpen(false);
+      setNewBranchState((prev) => prev.linkedCodebaseMergeRequest || prev.linkedGuest?.providerId === 'codebase'
+        ? {
+          ...prev,
+          linkedCodebaseMergeRequest: null,
+          codebaseWorktreeConfig: null,
+          linkedGuest: null,
+        }
+        : prev);
+    });
+  }, []);
+
+  React.useEffect(() => {
+    return subscribeRuntimeEndpointChanged(() => setProviderResolutionEpoch((epoch) => epoch + 1));
+  }, []);
 
   React.useEffect(() => {
     if (!existingBranchDropdownOpen && !existingBranchPickerOpen) {
@@ -534,7 +603,7 @@ export function NewWorktreeDialog({
 
     if (args.guest) {
       const kind = args.guest.kind === 'pull' ? 'pull' : 'issue';
-      void sessionActions.setLinkedIssue(
+      await sessionActions.setLinkedIssue(
         args.sessionId,
         args.directory,
         buildLinkedGuestIssue({
@@ -549,7 +618,7 @@ export function NewWorktreeDialog({
           linkedAt: Date.now(),
         }),
         true,
-      ).catch(() => undefined);
+      );
 
       if (args.guest.text) {
         if (!providerID || !modelID) {
@@ -849,6 +918,8 @@ export function NewWorktreeDialog({
       sourceBranch: '',
       linkedIssue: null,
       linkedPr: null,
+      linkedCodebaseMergeRequest: null,
+      codebaseWorktreeConfig: null,
       linkedLinearIssue: null,
       linkedGuest: null,
       includePrDiff: false,
@@ -898,7 +969,9 @@ export function NewWorktreeDialog({
       // Only run server validation if we have values
       if (normalizedBranch && normalizedWorktree) {
         const linkedPr = mode === 'new-branch' ? newBranchState.linkedPr : null;
-        const prConfig = linkedPr ? resolvePrWorktreeConfig(linkedPr, localBranches, remoteBranches) : null;
+        const prConfig = linkedPr
+          ? resolvePrWorktreeConfig(linkedPr, localBranches, remoteBranches)
+          : mode === 'new-branch' ? newBranchState.codebaseWorktreeConfig : null;
         const result = await validateWorktreeCreate(projectRef, {
           mode: mode === 'existing-branch' || prConfig ? 'existing' : 'new',
           branchName: normalizedBranch,
@@ -945,6 +1018,7 @@ export function NewWorktreeDialog({
     mode,
     newBranchState.branchName,
     newBranchState.linkedPr,
+    newBranchState.codebaseWorktreeConfig,
     existingBranchState.selectedBranch,
     currentState.worktreeName,
     localBranches,
@@ -1010,6 +1084,7 @@ export function NewWorktreeDialog({
     
     try {
       const linkedPr = mode === 'new-branch' ? newBranchState.linkedPr : null;
+      const codebaseWorktreeConfig = mode === 'new-branch' ? newBranchState.codebaseWorktreeConfig : null;
       const linkedIssue = mode === 'new-branch' ? newBranchState.linkedIssue : null;
       const linkedLinearIssue = mode === 'new-branch' ? newBranchState.linkedLinearIssue : null;
       const linkedGuest = mode === 'new-branch' ? newBranchState.linkedGuest : null;
@@ -1022,8 +1097,13 @@ export function NewWorktreeDialog({
 
       let sourceLabel = '';
       const args = (() => {
-        if (linkedPr) {
-          const prConfig = resolvePrWorktreeConfig(linkedPr, localBranches, remoteBranches);
+        if (linkedPr || codebaseWorktreeConfig) {
+          const prConfig = linkedPr
+            ? resolvePrWorktreeConfig(linkedPr, localBranches, remoteBranches)
+            : codebaseWorktreeConfig;
+          if (!prConfig) {
+            throw new Error('Merge request source repository is unavailable.');
+          }
           sourceLabel = prConfig.sourceLabel;
           return {
             preferredName: normalizedBranch || normalizedWorktree,
@@ -1101,7 +1181,7 @@ export function NewWorktreeDialog({
       const lastSourceBranch = resolveWorktreeSourceBranchToPersist({
         mode,
         sourceBranch: newBranchState.sourceBranch,
-        linkedPr: !!newBranchState.linkedPr,
+        linkedPr: !!newBranchState.linkedPr || !!newBranchState.linkedCodebaseMergeRequest,
         selectedBranch: existingBranchState.selectedBranch,
       });
 
@@ -1161,6 +1241,8 @@ export function NewWorktreeDialog({
         ...prev,
         linkedIssue: null,
         linkedPr: null,
+        linkedCodebaseMergeRequest: null,
+        codebaseWorktreeConfig: null,
         linkedLinearIssue: null,
       linkedGuest: null,
         includePrDiff: false,
@@ -1176,6 +1258,8 @@ export function NewWorktreeDialog({
         ...prev,
         linkedIssue: issue,
         linkedPr: null,
+        linkedCodebaseMergeRequest: null,
+        codebaseWorktreeConfig: null,
         linkedLinearIssue: null,
       linkedGuest: null,
         includePrDiff: false,
@@ -1188,6 +1272,8 @@ export function NewWorktreeDialog({
       setNewBranchState(prev => ({
         ...prev,
         linkedPr: pr,
+        linkedCodebaseMergeRequest: null,
+        codebaseWorktreeConfig: null,
         linkedIssue: null,
         linkedLinearIssue: null,
       linkedGuest: null,
@@ -1197,6 +1283,40 @@ export function NewWorktreeDialog({
         isSyncingWorktreeName: true,
       }));
     }
+  };
+
+  const handleCodebaseMergeRequestSelect = (mergeRequest: CodebaseMergeRequest) => {
+    if (!projectDirectory || !git?.getRemotes) {
+      toast.error(t('codebase.error.sourceUnavailable'));
+      return;
+    }
+    const requestId = ++codebaseSelectionRequestRef.current;
+    setIsSelectingCodebaseMergeRequest(true);
+    void git.getRemotes(projectDirectory)
+      .then((remotes) => {
+        if (requestId !== codebaseSelectionRequestRef.current) return;
+        const config = resolveCodebaseMergeRequestWorktreeConfig(mergeRequest, remotes, remoteBranches);
+        setNewBranchState((prev) => ({
+          ...prev,
+          linkedCodebaseMergeRequest: mergeRequest,
+          codebaseWorktreeConfig: config,
+          linkedIssue: null,
+          linkedPr: null,
+          linkedLinearIssue: null,
+          linkedGuest: codebaseWorktreeAttachment(mergeRequest),
+          includePrDiff: false,
+          branchName: mergeRequest.sourceBranch,
+          worktreeName: slugifyWorktreeName(mergeRequest.sourceBranch),
+          isSyncingWorktreeName: true,
+        }));
+        setIsSelectingCodebaseMergeRequest(false);
+        setCodebaseDialogOpen(false);
+      })
+      .catch(() => {
+        if (requestId !== codebaseSelectionRequestRef.current) return;
+        setIsSelectingCodebaseMergeRequest(false);
+        toast.error(t('codebase.error.sourceUnavailable'));
+      });
   };
 
   const handleLinearSelect = (issue: {
@@ -1216,6 +1336,8 @@ export function NewWorktreeDialog({
       },
       linkedIssue: null,
       linkedPr: null,
+      linkedCodebaseMergeRequest: null,
+      codebaseWorktreeConfig: null,
       linkedGuest: null,
       includePrDiff: false,
       branchName: newBranchName,
@@ -1232,6 +1354,8 @@ export function NewWorktreeDialog({
       linkedGuest: issue,
       linkedIssue: null,
       linkedPr: null,
+      linkedCodebaseMergeRequest: null,
+      codebaseWorktreeConfig: null,
       linkedLinearIssue: null,
       includePrDiff: Boolean(issue.text),
       branchName: newBranchName,
@@ -1242,16 +1366,18 @@ export function NewWorktreeDialog({
   };
 
   // GitHub connection check
-  const isGitHubConnected = githubAuthChecked && githubAuthStatus?.connected === true;
+  const isGitHubConnected = mergeRequestProvider === 'github' && githubAuthChecked && githubAuthStatus?.connected === true;
+  const isCodebaseAvailable = mergeRequestProvider === 'codebase' && Boolean(codebase);
   const isLinearConnected = Boolean(linear) && linearAuthChecked && linearAuthStatus?.connected === true;
   const linkedGuest = newBranchState.linkedGuest
     ? dialogGuests.find((entry) => entry.id === newBranchState.linkedGuest?.providerId)
     : undefined;
-  const linkedGuestIcon = linkedGuest?.icon;
+  const linkedGuestIcon = newBranchState.linkedGuest?.providerId === 'codebase' ? 'gitlab' : linkedGuest?.icon;
   const linkedGuestIconSrc = linkedGuest?.iconSrc;
   const hasLinkedItem = Boolean(
     newBranchState.linkedIssue
     || newBranchState.linkedPr
+    || newBranchState.linkedCodebaseMergeRequest
     || newBranchState.linkedLinearIssue
     || newBranchState.linkedGuest,
   );
@@ -1261,13 +1387,15 @@ export function NewWorktreeDialog({
     ? !!existingBranchState.selectedBranch && !!existingBranchState.worktreeName && !validation.branchError && !validation.worktreeError
     : !!normalizeBranchName(newBranchState.branchName) && !!newBranchState.worktreeName && !validation.branchError && !validation.worktreeError;
 
-  const canCreate = isFormValid && !isCreating;
+  const canCreate = isFormValid && !isCreating && !isSelectingCodebaseMergeRequest;
 
   const handleClearLinkedItem = () => {
     setNewBranchState(prev => ({
       ...prev,
       linkedIssue: null,
       linkedPr: null,
+      linkedCodebaseMergeRequest: null,
+      codebaseWorktreeConfig: null,
       linkedLinearIssue: null,
       linkedGuest: null,
       branchName: '',
@@ -1276,7 +1404,7 @@ export function NewWorktreeDialog({
     }));
   };
 
-  const startFromIssueButtons = mode === 'new-branch' && (isGitHubConnected || isLinearConnected || dialogGuests.length > 0) ? (
+  const startFromIssueButtons = mode === 'new-branch' && (isGitHubConnected || isCodebaseAvailable || isLinearConnected || dialogGuests.length > 0) ? (
     <div className="flex items-center gap-0.5 shrink-0">
       {isGitHubConnected && (
         <Button
@@ -1288,6 +1416,18 @@ export function NewWorktreeDialog({
           aria-label={t('session.newWorktree.actions.startFromGitHubIssuePr')}
         >
           <Icon name="github" className="size-4 text-status-success" />
+        </Button>
+      )}
+      {isCodebaseAvailable && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setCodebaseDialogOpen(true)}
+          className="h-8 w-8 px-0"
+          title={t('codebase.actions.startFromIssueMr')}
+          aria-label={t('codebase.actions.startFromIssueMr')}
+        >
+          <Icon name="gitlab" className="size-4" />
         </Button>
       )}
       {isLinearConnected && (
@@ -1558,17 +1698,19 @@ export function NewWorktreeDialog({
                       isSyncingWorktreeName: true,
                       linkedIssue: null,
                       linkedPr: null,
+                      linkedCodebaseMergeRequest: null,
+                      codebaseWorktreeConfig: null,
                       linkedLinearIssue: null,
       linkedGuest: null,
                     }));
                   }}
                   onBlur={() => setValidation(prev => ({ ...prev, touched: true }))}
                   placeholder={t('session.newWorktree.branchNamePlaceholder')}
-                  disabled={!!newBranchState.linkedPr}
+                  disabled={!!newBranchState.linkedPr || !!newBranchState.linkedCodebaseMergeRequest}
                   className={cn(
                     'h-8',
                     validation.touched && validation.branchError && 'border-destructive',
-                    newBranchState.linkedPr && 'bg-muted text-muted-foreground'
+                    (newBranchState.linkedPr || newBranchState.linkedCodebaseMergeRequest) && 'bg-muted text-muted-foreground'
                   )}
                 />
                 {newBranchState.linkedPr && (
@@ -1576,6 +1718,14 @@ export function NewWorktreeDialog({
                     <Icon name="check" className="h-3.5 w-3.5 text-status-success" />
                     <span className="typography-micro">
                       {t('session.newWorktree.usingPrBranch', { branch: newBranchState.linkedPr.head })}
+                    </span>
+                  </div>
+                )}
+                {newBranchState.linkedCodebaseMergeRequest && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Icon name="check" className="h-3.5 w-3.5 text-status-success" />
+                    <span className="typography-micro">
+                      {t('codebase.usingMergeRequestBranch', { branch: newBranchState.linkedCodebaseMergeRequest.sourceBranch })}
                     </span>
                   </div>
                 )}
@@ -1668,7 +1818,7 @@ export function NewWorktreeDialog({
             </div>
 
             {/* Source Branch - Only for New Branch mode, hide when PR is selected */}
-            {mode === 'new-branch' && !newBranchState.linkedPr && (
+            {mode === 'new-branch' && !newBranchState.linkedPr && !newBranchState.linkedCodebaseMergeRequest && (
               <div className="space-y-1.5">
                 <label className="typography-ui-label text-foreground block font-semibold">
                   {t('session.newWorktree.sourceBranch')}
@@ -1819,7 +1969,7 @@ export function NewWorktreeDialog({
                     />
                   ) : (
                     <Icon
-                      name={newBranchState.linkedLinearIssue ? 'linear' : 'github'}
+                      name={newBranchState.linkedLinearIssue ? 'linear' : newBranchState.linkedCodebaseMergeRequest ? 'gitlab' : 'github'}
                       className={cn(
                         'h-3.5 w-3.5 shrink-0',
                         newBranchState.linkedLinearIssue ? 'text-foreground' : 'text-status-success',
@@ -1842,6 +1992,11 @@ export function NewWorktreeDialog({
                         {t('session.newWorktree.prNumber', { number: newBranchState.linkedPr.number })}
                       </span>
                     )}
+                    {newBranchState.linkedCodebaseMergeRequest && !newBranchState.linkedGuest && (
+                      <span className="typography-micro text-muted-foreground shrink-0">
+                        !{newBranchState.linkedCodebaseMergeRequest.number}
+                      </span>
+                    )}
                     {newBranchState.linkedGuest && (
                       <span className="typography-micro text-muted-foreground shrink-0">
                         {newBranchState.linkedGuest.id}
@@ -1849,11 +2004,11 @@ export function NewWorktreeDialog({
                     )}
                   
                   <span className="typography-micro text-foreground truncate flex-1">
-                    {newBranchState.linkedGuest?.title || newBranchState.linkedLinearIssue?.title || newBranchState.linkedIssue?.title || newBranchState.linkedPr?.title}
+                    {newBranchState.linkedGuest?.title || newBranchState.linkedLinearIssue?.title || newBranchState.linkedIssue?.title || newBranchState.linkedPr?.title || newBranchState.linkedCodebaseMergeRequest?.title}
                   </span>
                   
                   <a
-                    href={newBranchState.linkedGuest?.url || newBranchState.linkedLinearIssue?.url || newBranchState.linkedIssue?.url || newBranchState.linkedPr?.url}
+                    href={newBranchState.linkedGuest?.url || newBranchState.linkedLinearIssue?.url || newBranchState.linkedIssue?.url || newBranchState.linkedPr?.url || newBranchState.linkedCodebaseMergeRequest?.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-muted-foreground hover:text-foreground shrink-0"
@@ -1871,8 +2026,8 @@ export function NewWorktreeDialog({
                 </div>
                 
                 {/* Row 2: PR branch info + diff indicator */}
-                {newBranchState.linkedPr && (
-                  <div className="flex items-center gap-2 mt-0.5 pl-5">
+                  {newBranchState.linkedPr && (
+                    <div className="flex items-center gap-2 mt-0.5 pl-5">
                     <span className="typography-micro text-muted-foreground">
                       {newBranchState.linkedPr.head} → {newBranchState.linkedPr.base}
                     </span>
@@ -1881,6 +2036,13 @@ export function NewWorktreeDialog({
                           {t('session.newWorktree.includeDiffBadge')}
                         </span>
                       )}
+                  </div>
+                )}
+                {newBranchState.linkedCodebaseMergeRequest && !newBranchState.linkedGuest && (
+                  <div className="flex items-center gap-2 mt-0.5 pl-5">
+                    <span className="typography-micro text-muted-foreground">
+                      {newBranchState.linkedCodebaseMergeRequest.sourceBranch} → {newBranchState.linkedCodebaseMergeRequest.targetBranch}
+                    </span>
                   </div>
                 )}
                 {newBranchState.linkedGuest?.branches && (
@@ -2075,18 +2237,20 @@ export function NewWorktreeDialog({
                         branchName: e.target.value,
                         isSyncingWorktreeName: true,
                         linkedIssue: null,
-                        linkedPr: null,
+                      linkedPr: null,
+                      linkedCodebaseMergeRequest: null,
+                      codebaseWorktreeConfig: null,
                         linkedLinearIssue: null,
       linkedGuest: null,
                       }));
                     }}
                     onBlur={() => setValidation(prev => ({ ...prev, touched: true }))}
                     placeholder={t('session.newWorktree.branchNamePlaceholder')}
-                    disabled={!!newBranchState.linkedPr}
+                  disabled={!!newBranchState.linkedPr || !!newBranchState.linkedCodebaseMergeRequest}
                     className={cn(
                       'h-8',
                       validation.touched && validation.branchError && 'border-destructive',
-                      newBranchState.linkedPr && 'bg-muted text-muted-foreground'
+                    (newBranchState.linkedPr || newBranchState.linkedCodebaseMergeRequest) && 'bg-muted text-muted-foreground'
                     )}
                   />
                   {newBranchState.linkedPr && (
@@ -2094,6 +2258,14 @@ export function NewWorktreeDialog({
                       <Icon name="check" className="h-3.5 w-3.5 text-status-success" />
                       <span className="typography-micro">
                         {t('session.newWorktree.usingPrBranch', { branch: newBranchState.linkedPr.head })}
+                      </span>
+                    </div>
+                  )}
+                        {newBranchState.linkedCodebaseMergeRequest && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Icon name="check" className="h-3.5 w-3.5 text-status-success" />
+                      <span className="typography-micro">
+                        {t('codebase.usingMergeRequestBranch', { branch: newBranchState.linkedCodebaseMergeRequest.sourceBranch })}
                       </span>
                     </div>
                   )}
@@ -2186,7 +2358,7 @@ export function NewWorktreeDialog({
               </div>
 
               {/* Source Branch - Only for New Branch mode, hide when PR is selected */}
-              {mode === 'new-branch' && !newBranchState.linkedPr && (
+              {mode === 'new-branch' && !newBranchState.linkedPr && !newBranchState.linkedCodebaseMergeRequest && (
                 <div className="space-y-1.5">
                 <label className="typography-ui-label text-foreground block font-semibold">
                   {t('session.newWorktree.sourceBranch')}
@@ -2310,7 +2482,7 @@ export function NewWorktreeDialog({
                     />
                     ) : (
                       <Icon
-                        name={newBranchState.linkedLinearIssue ? 'linear' : 'github'}
+                        name={newBranchState.linkedLinearIssue ? 'linear' : newBranchState.linkedCodebaseMergeRequest ? 'gitlab' : 'github'}
                         className={cn(
                           'h-3.5 w-3.5 shrink-0',
                           newBranchState.linkedLinearIssue ? 'text-foreground' : 'text-status-success',
@@ -2333,6 +2505,11 @@ export function NewWorktreeDialog({
                         {t('session.newWorktree.prNumber', { number: newBranchState.linkedPr.number })}
                       </span>
                     )}
+                    {newBranchState.linkedCodebaseMergeRequest && !newBranchState.linkedGuest && (
+                      <span className="typography-micro text-muted-foreground shrink-0">
+                        !{newBranchState.linkedCodebaseMergeRequest.number}
+                      </span>
+                    )}
                     {newBranchState.linkedGuest && (
                       <span className="typography-micro text-muted-foreground shrink-0">
                         {newBranchState.linkedGuest.id}
@@ -2340,11 +2517,11 @@ export function NewWorktreeDialog({
                     )}
                     
                     <span className="typography-micro text-foreground truncate flex-1">
-                      {newBranchState.linkedGuest?.title || newBranchState.linkedLinearIssue?.title || newBranchState.linkedIssue?.title || newBranchState.linkedPr?.title}
+                    {newBranchState.linkedGuest?.title || newBranchState.linkedLinearIssue?.title || newBranchState.linkedIssue?.title || newBranchState.linkedPr?.title || newBranchState.linkedCodebaseMergeRequest?.title}
                     </span>
                     
                     <a
-                      href={newBranchState.linkedGuest?.url || newBranchState.linkedLinearIssue?.url || newBranchState.linkedIssue?.url || newBranchState.linkedPr?.url}
+                    href={newBranchState.linkedGuest?.url || newBranchState.linkedLinearIssue?.url || newBranchState.linkedIssue?.url || newBranchState.linkedPr?.url || newBranchState.linkedCodebaseMergeRequest?.url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-muted-foreground hover:text-foreground shrink-0"
@@ -2362,7 +2539,7 @@ export function NewWorktreeDialog({
                   </div>
                   
                   {/* Row 2: PR branch info + diff indicator */}
-                  {newBranchState.linkedPr && (
+                {newBranchState.linkedPr && (
                     <div className="flex items-center gap-2 mt-0.5 pl-5">
                       <span className="typography-micro text-muted-foreground">
                         {newBranchState.linkedPr.head} → {newBranchState.linkedPr.base}
@@ -2372,6 +2549,13 @@ export function NewWorktreeDialog({
                           {t('session.newWorktree.includeDiffBadge')}
                         </span>
                       )}
+                    </div>
+                  )}
+                  {newBranchState.linkedCodebaseMergeRequest && !newBranchState.linkedGuest && (
+                    <div className="flex items-center gap-2 mt-0.5 pl-5">
+                      <span className="typography-micro text-muted-foreground">
+                        {newBranchState.linkedCodebaseMergeRequest.sourceBranch} → {newBranchState.linkedCodebaseMergeRequest.targetBranch}
+                      </span>
                     </div>
                   )}
                   {newBranchState.linkedGuest?.branches && (
@@ -2432,6 +2616,21 @@ export function NewWorktreeDialog({
         open={githubDialogOpen}
         onOpenChange={setGithubDialogOpen}
         onSelect={handleGitHubSelect}
+      />
+      <CodebaseMergeRequestPickerDialog
+        open={codebaseDialogOpen}
+        onOpenChange={(nextOpen) => {
+          setCodebaseDialogOpen(nextOpen);
+          if (!nextOpen) {
+            codebaseSelectionRequestRef.current += 1;
+            setIsSelectingCodebaseMergeRequest(false);
+          }
+        }}
+        onSelect={handleCodebaseMergeRequestSelect}
+        onSelectIssue={(issue: CodebaseIssue) => {
+          handleGuestSelect(codebaseWorktreeAttachment(issue));
+          setCodebaseDialogOpen(false);
+        }}
       />
       <LinearIssuePickerDialog
         open={linearDialogOpen}
