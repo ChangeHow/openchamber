@@ -534,7 +534,6 @@ export const dict = {
   'sessions.sidebar.sessionDialogs.worktree.attachedArchived': 'Worktree ci-joint archivé.',
   'sessions.sidebar.sessionDialogs.worktree.attachedArchivedPlural': 'Worktrees joints archivés.',
   'sessions.sidebar.sessionDialogs.worktree.archivedAndRemoteRemoved': 'Worktrees archivés et branches du dépôt distant supprimées.',
-  'sessions.missingDirectory.movedToProject': 'Le dossier de cette session n\'existe plus. La session a été déplacée vers {project}.',
   'sessions.sidebar.group.worktreeMissing': 'Le dossier du worktree est introuvable',
   'sessions.sidebar.sessionDialogs.worktree.label': 'Worktree',
   'sessions.sidebar.sessionDialogs.worktree.pathUnavailable': 'Chemin du worktree indisponible.',

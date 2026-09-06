@@ -17,7 +17,7 @@ import { Icon } from "@/components/icon/Icon";
 import type { IconName } from '@/components/icon/icons';
 import { useDeviceInfo } from '@/lib/device';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { isTerminalCwdMissingError, terminalSnapshotSize } from '@/lib/terminalApi';
+import { terminalSnapshotSize } from '@/lib/terminalApi';
 import { extractTerminalPreviewUrl, isTerminalPreviewUrlAvailable } from '@/lib/terminalPreview';
 import { useI18n } from '@/lib/i18n';
 import { PROJECT_ACTION_ICONS } from '@/lib/projectActions';
@@ -40,14 +40,6 @@ const resolveTabIconName = (iconKey: string | null): IconName => {
 export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }) => {
     const { t } = useI18n();
     const { terminal, runtime } = useRuntimeAPIs();
-    // The server rejects a working directory that no longer exists (a worktree
-    // deleted outside OpenChamber). The session is what is stranded, not the
-    // terminal: relocating it to its project changes the effective directory,
-    // and this view then starts a terminal there on its own.
-    const recoverCurrentSessionDirectory = React.useCallback(() => {
-        const sessionId = useSessionUIStore.getState().currentSessionId;
-        if (sessionId) void useSessionUIStore.getState().recoverMissingSessionDirectory(sessionId);
-    }, []);
     const { currentTheme } = useThemeSystem();
     const terminalAppearanceRef = React.useRef<{ themeMode: 'light' | 'dark'; terminalBackground: string; terminalForeground: string }>({ themeMode: 'dark', terminalBackground: '', terminalForeground: '' });
     terminalAppearanceRef.current = { themeMode: currentTheme.metadata.variant === 'light' ? 'light' : 'dark', terminalBackground: currentTheme.colors.surface.background, terminalForeground: currentTheme.colors.syntax.base.foreground };
@@ -546,7 +538,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
                     // this tab stopped owning the request; use current store
                     // ownership so a rejected create cannot leave it spinning.
                     if (directoryRef.current !== directory || activeTabIdRef.current !== tabId) return;
-                    if (isTerminalCwdMissingError(error)) recoverCurrentSessionDirectory();
                     setConnectionError(
                         error instanceof Error
                             ? error.message
@@ -590,7 +581,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
         setTabSessionId,
         startStream,
         disconnectStream,
-        recoverCurrentSessionDirectory,
         t,
         terminal,
         terminalLoginShell,
@@ -654,7 +644,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
                 || directoryRef.current !== terminalDirectory
                 || activeTabIdRef.current !== tabId
             ) return;
-            if (isTerminalCwdMissingError(error)) recoverCurrentSessionDirectory();
             setConnectionError(
                 error instanceof Error ? error.message : t('terminalView.error.restartFailed')
             );
@@ -665,7 +654,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory }
         } finally {
             setIsRestarting(false);
         }
-    }, [activeTabId, disconnectStream, terminalDirectory, enableTabs, isActionTab, isRestarting, recoverCurrentSessionDirectory, resetTerminalPreviewScan, setTabLifecycle, setTabSessionId, startStream, t, terminal, terminalLoginShell, terminalShell]);
+    }, [activeTabId, disconnectStream, terminalDirectory, enableTabs, isActionTab, isRestarting, resetTerminalPreviewScan, setTabLifecycle, setTabSessionId, startStream, t, terminal, terminalLoginShell, terminalShell]);
 
     const handleHardRestart = React.useCallback(async () => {
         // Keep semantics: “close tab -> new clean tab”.
