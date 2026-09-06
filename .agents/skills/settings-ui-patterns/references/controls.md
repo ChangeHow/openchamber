@@ -38,6 +38,9 @@ cells or when the control is wide; same `info` / `settingsItem` props.
 
 ## Boolean
 
+For a self-explanatory enable/disable setting, use only a checkbox and label;
+no separate group title or description is needed.
+
 ```tsx
 <SettingsCheckboxRow
   checked={value}
@@ -54,12 +57,14 @@ for text that must stay visible (warnings, dynamic status).
 
 ## Mutually Exclusive Options
 
-Use `SettingsControlGroup` with a short title, a visible `description` directly
-below it, and the option list beneath. Explain scope and exceptions once at
-the group level, not in an info tooltip or repeated in each option. Composer's
-large-text paste and send-shortcut groups use this pattern. Keep ordinary
-boolean toggles as `SettingsCheckboxRow`; two alternative modes use radios,
-not independent checkboxes. Group spacing is defined in `layout.md`.
+Use radios for mutually exclusive modes, not independent checkboxes. Keep
+self-explanatory choices compact; a title or description is not mandatory.
+
+When the skill's Description Policy calls for a visible explanation, wrap
+the controls in `SettingsControlGroup`: title, description, then options.
+Explain the choice once at group level. Use checkbox rows for independent
+choices and radio options for mutually exclusive choices. Group spacing is
+defined in `layout.md`.
 
 ```tsx
 <SettingsControlGroup title={t('...group')} description={t('...description')}>
