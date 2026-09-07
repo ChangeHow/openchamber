@@ -34,7 +34,7 @@ export type TerminalBuffer = {
   lastSequence: number;
 };
 
-export const EMPTY_TERMINAL_BUFFER: TerminalBuffer = Object.freeze({
+const EMPTY_TERMINAL_BUFFER: TerminalBuffer = Object.freeze({
   chunks: Object.freeze([]) as unknown as TerminalChunk[],
   byteLength: 0,
   lastSequence: -1,

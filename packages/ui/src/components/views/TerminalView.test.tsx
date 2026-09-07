@@ -98,7 +98,7 @@ mock.module('@/stores/useUIStore', () => ({ useUIStore: useUiStoreMock }));
 mock.module('@/stores/useInlineCommentDraftStore', () => ({ useInlineCommentDraftStore: () => ({ addDraft: () => undefined }) }));
 mock.module('@/components/terminal/TerminalViewport', () => ({
   TerminalViewport: React.forwardRef(function TerminalViewportMock(
-    { sessionKey, chunks, isVisible }: { sessionKey: string; chunks: unknown[]; isVisible: boolean },
+    { sessionKey, chunks, isVisible, onResize }: { sessionKey: string; chunks: unknown[]; isVisible: boolean; onResize: (cols: number, rows: number) => void },
     ref: React.ForwardedRef<{ focus: () => void; fit: () => void; getSelection: () => null }>,
   ) {
     React.useImperativeHandle(ref, () => ({
@@ -106,6 +106,11 @@ mock.module('@/components/terminal/TerminalViewport', () => ({
       fit: () => undefined,
       getSelection: () => null,
     }), []);
+    // A real surface reports its fitted grid once it is visible; a visible tab
+    // spawns its shell only after that report.
+    React.useEffect(() => {
+      if (isVisible) onResize(100, 30);
+    }, [isVisible, onResize]);
 
     return React.createElement('div', {
       'data-terminal-viewport': 'true',
@@ -303,7 +308,7 @@ describe('TerminalView project action tab indicator', () => {
     expect(ensureDirectoryCalls).not.toContain('/missing-repo');
     expect(createSessionCalls.length).toBe(0);
     expect(host.querySelector('[data-tabs-strip="terminal"]')).toBeNull();
-    expect(host.querySelector('[data-terminal-viewport="true"]')?.getAttribute('data-chunk-count')).toBe('0');
+    expect(host.querySelector('[data-terminal-viewport="true"]')).toBeNull();
   });
 
   test('includes the terminal directory in the viewport identity key', async () => {

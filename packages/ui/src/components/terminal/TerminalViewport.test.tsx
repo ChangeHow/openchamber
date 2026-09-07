@@ -1,59 +1,58 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import React, { act } from 'react';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 
+import { I18nProvider } from '@/lib/i18n';
 import { useTerminalStore, type TerminalChunk } from '@/stores/useTerminalStore';
+
+import { TerminalViewport, type TerminalSurface, type TerminalSurfaceFactory } from './TerminalViewport';
 
 type TerminalEvent =
   | { type: 'write'; data: string }
-  | { type: 'reset' }
-  | { type: 'resize'; cols: number; rows: number };
+  | { type: 'reset'; data: string; size?: { cols: number; rows: number } }
+  | { type: 'visible'; visible: boolean }
+  | { type: 'dispose' };
 const terminalEvents: TerminalEvent[] = [];
 
-class GhosttyTerminalDouble {
-  public options: { cursorBlink: boolean };
-  public cols = 80;
-  public rows = 24;
-
-  constructor(options: { cursorBlink?: boolean; cols?: number; rows?: number }) {
-    this.options = { cursorBlink: options.cursorBlink ?? false };
-    this.cols = options.cols ?? 80;
-    this.rows = options.rows ?? 24;
-  }
-
-  loadAddon() {}
-  open() {}
-  onData() {
-    return { dispose() {} };
-  }
-  write(data: string, callback?: () => void) {
+class TerminalSurfaceDouble implements TerminalSurface {
+  write(data: string) {
     terminalEvents.push({ type: 'write', data });
-    callback?.();
   }
-  resize(cols: number, rows: number) {
-    this.cols = cols;
-    this.rows = rows;
-    terminalEvents.push({ type: 'resize', cols, rows });
+  resetAndWrite(data: string, drawnSize?: { readonly cols: number; readonly rows: number }) {
+    const event: TerminalEvent = { type: 'reset', data };
+    if (drawnSize) event.size = { cols: drawnSize.cols, rows: drawnSize.rows };
+    terminalEvents.push(event);
   }
-  reset() {
-    terminalEvents.push({ type: 'reset' });
+  setTheme() {}
+  setFont() {
+    return Promise.resolve();
   }
+  setVisible(visible: boolean) {
+    terminalEvents.push({ type: 'visible', visible });
+  }
+  fit() {
+    return true;
+  }
+  refresh() {}
   focus() {}
-  dispose() {}
+  getSelection() {
+    return '';
+  }
+  getSelectionPosition() {
+    return null;
+  }
+  scrollLines() {}
+  selectWordAt() {
+    return false;
+  }
+  extendSelectionTo() {}
+  dispose() {
+    terminalEvents.push({ type: 'dispose' });
+  }
 }
 
-class FitAddonDouble {
-  fit() {}
-}
-
-mock.module('ghostty-web', () => ({
-  Ghostty: { load: async () => ({}) },
-  Terminal: GhosttyTerminalDouble,
-  FitAddon: FitAddonDouble,
-}));
-
-const { TerminalViewport } = await import('./TerminalViewport');
+const createSurface: TerminalSurfaceFactory = () => Promise.resolve(new TerminalSurfaceDouble());
 
 const theme = {
   background: '#000000',
@@ -80,18 +79,15 @@ const theme = {
   brightWhite: '#ffffff',
 } as const;
 
-const flushGhosttyLoad = async () => {
+const flushSurfaceLoad = async () => {
   await act(async () => {
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
   });
 };
 
 const TERMINAL_BUFFER_CAP = 512 * 1024;
-
-const replayWriteEvents = (expectedPayloads: string[]) => terminalEvents.filter(
-  (event): event is { type: 'write'; data: string } => event.type === 'write' && expectedPayloads.includes(event.data),
-);
 
 const buildReplacedBufferChunks = (content: string): TerminalChunk[] => {
   const directory = '/fixture';
@@ -103,18 +99,22 @@ const buildReplacedBufferChunks = (content: string): TerminalChunk[] => {
   return [...useTerminalStore.getState().getBuffer(directory, tabId).chunks];
 };
 
-const renderViewport = (root: Root, chunks: TerminalChunk[]) => act(async () => {
+const renderViewport = (root: Root, chunks: TerminalChunk[], isVisible = true) => act(async () => {
   root.render(
-    <TerminalViewport
-      sessionKey="session-1"
-      chunks={chunks}
-      onInput={() => undefined}
-      onResize={() => undefined}
-      theme={theme}
-      monoFont="geist-mono"
-      fontFamily="Geist Mono"
-      fontSize={14}
-    />,
+    <I18nProvider>
+      <TerminalViewport
+        sessionKey="session-1"
+        chunks={chunks}
+        onInput={() => undefined}
+        onResize={() => undefined}
+        theme={theme}
+        monoFont="system-mono"
+        fontFamily="Menlo"
+        fontSize={14}
+        isVisible={isVisible}
+        createSurface={createSurface}
+      />
+    </I18nProvider>,
   );
 });
 
@@ -135,30 +135,12 @@ describe('TerminalViewport chunk replay integration', () => {
       Element: windowInstance.Element,
       Node: windowInstance.Node,
       Event: windowInstance.Event,
-      InputEvent: windowInstance.InputEvent,
-      KeyboardEvent: windowInstance.KeyboardEvent,
-      MouseEvent: windowInstance.MouseEvent,
-      FocusEvent: windowInstance.FocusEvent,
-      ResizeObserver: class {
-        observe() {}
-        disconnect() {}
-      },
       requestAnimationFrame: (callback: FrameRequestCallback) => {
         callback(0);
         return 1;
       },
       cancelAnimationFrame: () => undefined,
       IS_REACT_ACT_ENVIRONMENT: true,
-    });
-    Object.defineProperty(windowInstance.document, 'hasFocus', {
-      configurable: true,
-      value: () => true,
-    });
-    Object.defineProperty(windowInstance.HTMLElement.prototype, 'getBoundingClientRect', {
-      configurable: true,
-      value() {
-        return { x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 600, width: 800, height: 600 };
-      },
     });
 
     host = document.createElement('div');
@@ -172,19 +154,20 @@ describe('TerminalViewport chunk replay integration', () => {
     useTerminalStore.getState().clearAll();
   });
 
-  test('would fail if adopted-buffer remount replay split history writes or exceeded the capped buffer payload', async () => {
+  test('replays adopted history as one reset and keeps the capped buffer payload intact', async () => {
     const replayChunks: TerminalChunk[] = [
       { id: 1, data: 'live-one\n', replayData: 'replay-one\n', byteLength: 9 },
       { id: 2, data: 'live-two\n', replayData: 'replay-two\n', byteLength: 9 },
       { id: 3, data: 'live-three\n', byteLength: 11 },
     ];
-    const replayPayload = 'replay-one\nreplay-two\nlive-three\n';
 
     await renderViewport(root, replayChunks);
-    await flushGhosttyLoad();
+    await flushSurfaceLoad();
 
-    expect(terminalEvents.filter((event) => event.type === 'reset')).toHaveLength(0);
-    expect(replayWriteEvents([replayPayload])).toEqual([{ type: 'write', data: replayPayload }]);
+    expect(terminalEvents.filter((event) => event.type === 'reset' || event.type === 'write')).toEqual([
+      { type: 'reset', data: 'replay-one\n' },
+      { type: 'write', data: 'replay-two\nlive-three\n' },
+    ]);
 
     await act(async () => root.unmount());
     host.remove();
@@ -197,13 +180,13 @@ describe('TerminalViewport chunk replay integration', () => {
     const oversizedPayload = oversizedReplayChunks.map((chunk) => chunk.data).join('');
 
     await renderViewport(root, oversizedReplayChunks);
-    await flushGhosttyLoad();
+    await flushSurfaceLoad();
 
-    expect(replayWriteEvents([oversizedPayload])).toEqual([{ type: 'write', data: oversizedPayload }]);
+    expect(terminalEvents.filter((event) => event.type === 'reset')).toEqual([{ type: 'reset', data: oversizedPayload }]);
     expect(new TextEncoder().encode(oversizedPayload).byteLength).toBeLessThanOrEqual(TERMINAL_BUFFER_CAP);
   });
 
-  test('would fail if authoritative replacement replay reset twice or re-streamed replacement history chunk-by-chunk', async () => {
+  test('appends live chunks and replaces history with a single reset', async () => {
     const initialChunks: TerminalChunk[] = [
       { id: 1, data: 'initial-live\n', replayData: 'initial-replay\n', byteLength: 13 },
     ];
@@ -215,10 +198,9 @@ describe('TerminalViewport chunk replay integration', () => {
       { id: 3, data: 'history-live-1\n', replayData: 'history-replay-1\n', byteLength: 15 },
       { id: 4, data: 'history-live-2\n', replayData: 'history-replay-2\n', byteLength: 15 },
     ];
-    const replacementReplayPayload = 'history-replay-1\nhistory-replay-2\n';
 
     await renderViewport(root, initialChunks);
-    await flushGhosttyLoad();
+    await flushSurfaceLoad();
     terminalEvents.length = 0;
 
     await renderViewport(root, appendedChunks);
@@ -226,66 +208,28 @@ describe('TerminalViewport chunk replay integration', () => {
 
     terminalEvents.length = 0;
     await renderViewport(root, replacementChunks);
-    expect(terminalEvents.filter((event) => event.type === 'reset')).toHaveLength(1);
-    expect(replayWriteEvents([replacementReplayPayload])).toEqual([{ type: 'write', data: replacementReplayPayload }]);
-    expect(terminalEvents.some((event) => event.type === 'write' && event.data === 'history-replay-1\n')).toBe(false);
-    expect(terminalEvents.some((event) => event.type === 'write' && event.data === 'history-replay-2\n')).toBe(false);
-    expect(terminalEvents.some((event) => event.type === 'write' && event.data === 'history-live-1\n')).toBe(false);
-    expect(terminalEvents.some((event) => event.type === 'write' && event.data === 'history-live-2\n')).toBe(false);
-  });
-
-  test('would fail if a live append after replacement replay duplicated history or lost the new chunk ordering', async () => {
-    const initialChunks: TerminalChunk[] = [
-      { id: 1, data: 'initial-live\n', replayData: 'initial-replay\n', byteLength: 13 },
-    ];
-    const replacementChunks: TerminalChunk[] = [
-      { id: 3, data: 'history-live-1\n', replayData: 'history-replay-1\n', byteLength: 15 },
-      { id: 4, data: 'history-live-2\n', replayData: 'history-replay-2\n', byteLength: 15 },
-    ];
-    const resumedChunks: TerminalChunk[] = [
-      ...replacementChunks,
-      { id: 5, data: 'tail-live\n', replayData: 'tail-replay\n', byteLength: 10 },
-    ];
-    const replacementReplayPayload = 'history-replay-1\nhistory-replay-2\n';
-
-    await renderViewport(root, initialChunks);
-    await flushGhosttyLoad();
+    expect(terminalEvents).toEqual([
+      { type: 'reset', data: 'history-replay-1\n' },
+      { type: 'write', data: 'history-replay-2\n' },
+    ]);
 
     terminalEvents.length = 0;
-    await renderViewport(root, replacementChunks);
-    await renderViewport(root, resumedChunks);
-
-    expect(terminalEvents.filter((event) => event.type === 'reset')).toHaveLength(1);
-    expect(replayWriteEvents([replacementReplayPayload, 'tail-live\n'])).toEqual([
-      { type: 'write', data: replacementReplayPayload },
-      { type: 'write', data: 'tail-live\n' },
-    ]);
-    expect(terminalEvents.filter((event) => event.type === 'write' && event.data === replacementReplayPayload)).toHaveLength(1);
-    expect(terminalEvents.filter((event) => event.type === 'write' && event.data === 'tail-live\n')).toHaveLength(1);
+    await renderViewport(root, [...replacementChunks, { id: 5, data: 'tail-live\n', replayData: 'tail-replay\n', byteLength: 10 }]);
+    expect(terminalEvents).toEqual([{ type: 'write', data: 'tail-live\n' }]);
   });
 
-  test('would fail if snapshot history drawn for another PTY size were replayed at the fitted size', async () => {
-    // A zsh prompt drawn for a 94-column PTY: the `%` end-of-line mark plus
-    // padding fills exactly one 94-column row. Written into an 80-column
-    // emulator it wraps and the mark survives as a stray fragment.
-    const history = `[7m%[0m${' '.repeat(93)}\r \r[J~ ❯ `;
+  test('passes the PTY size a snapshot was drawn for so the surface replays at that size', async () => {
+    const history = '[7m%[0m' + ' '.repeat(93) + '\r \r[J~ ❯ ';
     const chunks: TerminalChunk[] = [
       { id: 1, data: history, byteLength: history.length, size: { cols: 94, rows: 56 } },
       { id: 2, data: 'live\n', byteLength: 5 },
     ];
 
     await renderViewport(root, chunks);
-    await flushGhosttyLoad();
+    await flushSurfaceLoad();
 
-    // Default-background resets inside the history are rewritten before the
-    // write, so identify the history write by the prompt it carries.
-    const relevant = terminalEvents
-      .filter((event) => event.type === 'resize' || (event.type === 'write' && (event.data.includes('~ ❯') || event.data === 'live\n')))
-      .map((event) => (event.type === 'write' && event.data.includes('~ ❯') ? { type: 'write', data: 'history' } : event));
-    expect(relevant).toEqual([
-      { type: 'resize', cols: 94, rows: 56 },
-      { type: 'write', data: 'history' },
-      { type: 'resize', cols: 80, rows: 24 },
+    expect(terminalEvents.filter((event) => event.type === 'reset' || event.type === 'write')).toEqual([
+      { type: 'reset', data: history, size: { cols: 94, rows: 56 } },
       { type: 'write', data: 'live\n' },
     ]);
 
@@ -294,15 +238,18 @@ describe('TerminalViewport chunk replay integration', () => {
     expect(terminalEvents).toEqual([{ type: 'write', data: 'more\n' }]);
   });
 
-  test('would fail if a snapshot drawn at the fitted size still bounced the emulator through a resize', async () => {
-    const chunks: TerminalChunk[] = [
-      { id: 1, data: 'prompt ❯ ', byteLength: 11, size: { cols: 80, rows: 24 } },
-    ];
+  test('toggles surface visibility with the prop and disposes on unmount', async () => {
+    await renderViewport(root, [], false);
+    await flushSurfaceLoad();
+    const hiddenEvents = terminalEvents.filter((event) => event.type === 'visible');
+    expect(hiddenEvents.length).toBeGreaterThan(0);
+    expect(hiddenEvents.every((event) => event.type === 'visible' && !event.visible)).toBe(true);
 
-    await renderViewport(root, chunks);
-    await flushGhosttyLoad();
+    await renderViewport(root, [], true);
+    expect(terminalEvents.at(-1)).toEqual({ type: 'visible', visible: true });
 
-    expect(terminalEvents.filter((event) => event.type === 'resize')).toHaveLength(0);
-    expect(replayWriteEvents(['prompt ❯ '])).toEqual([{ type: 'write', data: 'prompt ❯ ' }]);
+    await act(async () => root.unmount());
+    expect(terminalEvents.at(-1)).toEqual({ type: 'dispose' });
+    root = createRoot(host);
   });
 });
