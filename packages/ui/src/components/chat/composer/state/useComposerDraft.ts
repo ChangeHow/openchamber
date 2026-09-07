@@ -15,6 +15,7 @@ import React from 'react';
 import { useInputStore } from '@/sync/input-store';
 
 import {
+    clearChatDraft,
     getChatDraftIdentityKey,
     readChatDraft,
     subscribeChatDraftDeletion,
@@ -108,6 +109,11 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
     React.useEffect(() => {
         currentIdentityRef.current = identity;
     }, [identity]);
+
+    React.useEffect(() => {
+        // Persistence off keeps in-memory drafts, but must not retain old disk copies.
+        if (!persistEnabled && identity) clearChatDraft(identity);
+    }, [identity, persistEnabled]);
 
     const persistNow = React.useCallback((target: ChatDraftIdentity | null, draft: string) => {
         if (!persistEnabled || !target) return;

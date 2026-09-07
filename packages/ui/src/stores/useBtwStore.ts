@@ -50,6 +50,7 @@ type BtwPanelUIState = {
   destroying?: boolean;
   pending?: boolean;
   pendingAutoAccept?: boolean;
+  pendingSend?: symbol;
 };
 
 type BtwStore = {

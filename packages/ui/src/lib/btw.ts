@@ -26,6 +26,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
  */
 export type StartBtwInput = {
   parentSessionId: string;
+  expectedRuntimeKey?: string;
   question: string;
   directory: string;
   providerID: string;
@@ -147,12 +148,41 @@ function insertForkIntoDirectoryStore(session: Session, directory: string): void
   }
 }
 
+/** Preparation can be discarded until the server-side fork starts. */
+export async function preparePendingBtwSend(
+  parentSessionId: string,
+  expectedRuntimeKey: string,
+  prepare: () => Promise<void>,
+): Promise<symbol | null> {
+  if (getRuntimeKey() !== expectedRuntimeKey) return null;
+  const panels = useBtwStore.getState();
+  const owner = panels.byParent[parentSessionId];
+  if (!owner?.pending || owner.creating || owner.pendingSend) return null;
+  const token = Symbol('btw-send');
+  panels.setPanelState(parentSessionId, { pendingSend: token });
+  try {
+    await prepare();
+  } catch (error) {
+    if (useBtwStore.getState().byParent[parentSessionId]?.pendingSend === token) {
+      panels.setPanelState(parentSessionId, { pendingSend: undefined });
+    }
+    throw error;
+  }
+  if (useBtwStore.getState().byParent[parentSessionId]?.pendingSend !== token) return null;
+  if (getRuntimeKey() !== expectedRuntimeKey) {
+    panels.clearPanelState(parentSessionId);
+    return null;
+  }
+  return token;
+}
+
 export async function startBtwSession(input: StartBtwInput): Promise<Session> {
   const { setPanelState } = useBtwStore.getState();
   if (useBtwStore.getState().byParent[input.parentSessionId]?.creating) {
     throw new Error('btw session creation already in progress');
   }
-  const expectedRuntimeKey = getRuntimeKey();
+  const expectedRuntimeKey = input.expectedRuntimeKey ?? getRuntimeKey();
+  if (getRuntimeKey() !== expectedRuntimeKey) throw new Error('runtime changed');
   setPanelState(input.parentSessionId, { creating: true });
   try {
     await sessionActions.waitForConnectionOrThrow();

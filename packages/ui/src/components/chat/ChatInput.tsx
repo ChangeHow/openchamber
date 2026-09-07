@@ -26,6 +26,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import {
     createChatDraftIdentity,
+    getChatDraftIdentityKey,
     clearChatDraft,
     readChatDraft,
     type ChatDraftIdentity,
@@ -36,7 +37,7 @@ import { BtwPanel } from './btw/BtwPanel';
 import { useBtwPanelState } from './btw/useBtwPanelState';
 import { resolveBtwSelection, useBtwStore } from '@/stores/useBtwStore';
 import { wasPromotedBtwSession } from '@/lib/sessionBtwMetadata';
-import { buildBtwSyntheticTexts, startBtwSession } from '@/lib/btw';
+import { buildBtwSyntheticTexts, preparePendingBtwSend, startBtwSession } from '@/lib/btw';
 import { AttachedFilesList, AttachedVSCodeFileChips, ActiveEditorFileSuggestion } from './FileAttachment';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { ToolPopupContent } from './message/types';
@@ -449,6 +450,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         ? `btw-pending:${currentSessionId}`
         : btwSessionId;
     const isBtwActive = Boolean(btwComposerSessionId) && !btwPanel.collapsed;
+    const immediateBtwSubmitRef = React.useRef<{ identity: ChatDraftIdentity; text: string } | null>(null);
     const draftCaretModeRef = React.useRef({ btw: isBtwActive, atEnd: isBtwActive });
     const inputMode = isBtwActive ? 'normal' : storedInputMode;
     // A session promoted out of `/btw` keeps the boundary instructions in its
@@ -1032,6 +1034,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
     const handleExitBtw = React.useCallback(() => {
         if (!currentSessionId) return;
+        immediateBtwSubmitRef.current = null;
         const panels = useBtwStore.getState();
         const pending = panels.byParent[currentSessionId];
         if (pending?.pending && !pending.creating && !btwSessionId) {
@@ -1134,7 +1137,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
     const hasContent = message.trim().length > 0 || attachedFiles.length > 0 || hasDrafts;
     const hasQueuedMessages = !isBtwActive && queuedMessages.length > 0;
-    const canSend = (hasContent || hasQueuedMessages) && !(isBtwActive && btwPanel.creating);
+    const preparingBtwSend = useBtwStore((state) => Boolean(currentSessionId && state.byParent[currentSessionId]?.pendingSend));
+    const canSend = (hasContent || hasQueuedMessages) && !(isBtwActive && (btwPanel.creating || preparingBtwSend));
 
     const canAbort = sessionPhase !== 'idle';
 
@@ -1368,7 +1372,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     };
 
     const handleSubmit = async (options?: SubmitOptions) => {
-        if (isBtwActive && btwPanel.creating) return;
+        if (isBtwActive && currentSessionId && (btwPanel.creating || useBtwStore.getState().byParent[currentSessionId]?.pendingSend)) return;
         const submitRuntimeKey = getRuntimeKey();
         const queuedOnly = options?.queuedOnly ?? false;
         const queuedMessageId = options?.queuedMessageId;
@@ -1413,8 +1417,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
         if (commandPlan?.command.name === 'handoff-review' && (isMobile || isVSCodeRuntime())) commandPlan = null;
 
-        // `/btw` only opens an isolated composer. The following explicit send
-        // creates the fork and delivers its first message.
+        // Enter BTW before sending so the question uses its isolated selections.
+        // A bare command waits for input; an argument requests one immediate send.
         if (commandPlan?.kind === 'prompt' && commandPlan.command.name === 'btw' && currentSessionId) {
             const targetComposerId = btwSessionId ?? `btw-pending:${currentSessionId}`;
             const targetIdentity = createChatDraftIdentity(
@@ -1424,6 +1428,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             );
             const argument = commandPlan.command.argument.trim();
             handoffDraft(targetIdentity, isBtwActive ? argument : argument || null);
+            if (argument && targetIdentity) immediateBtwSubmitRef.current = { identity: targetIdentity, text: argument };
             if (btwSessionId) {
                 useBtwStore.getState().setPanelState(currentSessionId, { collapsed: false });
                 return;
@@ -1747,15 +1752,29 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             }
         }
 
-        try {
-            const expandText = useSnippetsStore.getState().expandText;
-            primaryText = await expandText(primaryText);
-            for (const part of additionalParts) {
-                if (!part.synthetic) part.text = await expandText(part.text);
+        const expandOutgoingSnippets = async () => {
+            try {
+                const expandText = useSnippetsStore.getState().expandText;
+                primaryText = await expandText(primaryText);
+                for (const part of additionalParts) {
+                    if (!part.synthetic) part.text = await expandText(part.text);
+                }
+            } catch (error) {
+                console.warn('[ChatInput] Failed to expand snippets, sending original text:', error);
             }
-        } catch (error) {
-            console.warn('[ChatInput] Failed to expand snippets, sending original text:', error);
+        };
+        let pendingBtwSend: symbol | null = null;
+        if (isBtwActive && btwPanel.pending && currentSessionId) {
+            pendingBtwSend = await preparePendingBtwSend(currentSessionId, submitRuntimeKey, expandOutgoingSnippets);
+            if (!pendingBtwSend) {
+                if (getRuntimeKey() !== submitRuntimeKey) restoreComposerText();
+                return;
+            }
+        } else {
+            await expandOutgoingSnippets();
         }
+        const ownsPendingBtwSend = () => Boolean(pendingBtwSend && currentSessionId
+            && useBtwStore.getState().byParent[currentSessionId]?.pendingSend === pendingBtwSend);
 
         // Collect all attachments for error recovery
         const allAttachments = [
@@ -1773,6 +1792,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 || currentDirectory
                 || null;
             if (!targetDirectory) {
+                useBtwStore.getState().setPanelState(currentSessionId, { pendingSend: undefined });
                 restoreConsumedInput();
                 toast.error(t('chat.btw.toast.createFailed'));
                 return;
@@ -1780,6 +1800,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             try {
                 const fork = await startBtwSession({
                     parentSessionId: currentSessionId,
+                    expectedRuntimeKey: submitRuntimeKey,
                     question: primaryText,
                     directory: targetDirectory,
                     providerID: providerIdToSend,
@@ -1790,18 +1811,29 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     additionalParts,
                     permissionAutoAccept: pendingBtwAutoAccept,
                 });
+                if (!ownsPendingBtwSend()) return;
+                if (getRuntimeKey() !== submitRuntimeKey) {
+                    useBtwStore.getState().clearPanelState(currentSessionId);
+                    return;
+                }
                 const forkDirectory = fork.directory ?? targetDirectory;
                 migrateDraft(chatDraftIdentity, createChatDraftIdentity(activeRuntimeKey, forkDirectory, fork.id));
                 if (inlineDraftTarget) {
                     const drafts = useInlineCommentDraftStore.getState();
                     drafts.restoreDrafts({ directory: forkDirectory, sessionKey: fork.id }, drafts.consumeDrafts(inlineDraftTarget));
                 }
-                useBtwStore.getState().setPanelState(currentSessionId, { pending: false, creating: false });
+                useBtwStore.getState().setPanelState(currentSessionId, { pending: false, creating: false, pendingSend: undefined });
                 scrollToBottom?.();
             } catch (error) {
+                if (!ownsPendingBtwSend()) return;
+                if (getRuntimeKey() !== submitRuntimeKey) {
+                    useBtwStore.getState().clearPanelState(currentSessionId);
+                    restoreComposerText();
+                    return;
+                }
                 // Preserve the pending owner before restoring text so a failed
                 // first send never drops back into the parent draft.
-                useBtwStore.getState().setPanelState(currentSessionId, { pending: true, creating: false, collapsed: false });
+                useBtwStore.getState().setPanelState(currentSessionId, { pending: true, creating: false, collapsed: false, pendingSend: undefined });
                 restoreConsumedInput();
                 toast.error(getSubmitErrorMessage(error, t('chat.btw.toast.createFailed')));
             }
@@ -1950,6 +1982,18 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const next = appendInlineText(composerRef.current?.getValue() ?? messageRef.current, text);
         void handleSubmitRef.current({ presetText: next });
     }, []);
+
+    // A command with an argument sends once the isolated composer owns its draft.
+    React.useEffect(() => {
+        const pending = immediateBtwSubmitRef.current;
+        if (!pending || !isBtwActive || !chatDraftIdentity) return;
+        if (getChatDraftIdentityKey(pending.identity) !== getChatDraftIdentityKey(chatDraftIdentity)) {
+            immediateBtwSubmitRef.current = null;
+            return;
+        }
+        immediateBtwSubmitRef.current = null;
+        void handleSubmit({ presetText: pending.text });
+    });
 
     // Preset chips rendered outside this component (e.g. under the welcome
     // message on narrow surfaces) request a submit via the input store; consume
@@ -2173,12 +2217,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     ) => {
         const trigger = resolveAutocompleteTrigger(value, cursorPosition, {
             inputMode,
+            mentionsEnabled: !isBtwActive,
             inputSource,
             insertedText,
         });
         setOpenAutocomplete(trigger?.kind ?? null);
         setAutocompleteQuery(trigger?.query ?? '');
-    }, [inputMode]);
+    }, [inputMode, isBtwActive]);
 
     const insertTextAtSelection = React.useCallback((
         text: string,

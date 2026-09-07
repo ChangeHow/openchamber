@@ -77,6 +77,7 @@ export const BtwPanel: React.FC<{ parentSessionId: string; panel: BtwPanelState;
     if (panel.pending) {
         return (
             <BtwFrame
+                draftHint={t('chat.btw.draftHint')}
                 collapsed={panel.collapsed}
                 actions={(
                     <Button
@@ -241,8 +242,9 @@ const BtwFrame: React.FC<{
     titleClickLabel?: string;
     collapsed?: boolean;
     headerSpinner?: boolean;
+    draftHint?: string;
     children?: React.ReactNode;
-}> = ({ actions, onTitleClick, titleClickLabel, collapsed, headerSpinner, children }) => (
+}> = ({ actions, onTitleClick, titleClickLabel, collapsed, headerSpinner, draftHint, children }) => (
     <div
         className="chat-input-column absolute bottom-full left-0 right-0 z-30 mb-3"
         role="dialog"
@@ -268,6 +270,7 @@ const BtwFrame: React.FC<{
                 ) : (
                     <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
                         <Icon name="chat-ai-3" className="size-3.5 shrink-0" />
+                        {draftHint ? <span className="typography-ui-label truncate">{draftHint}</span> : null}
                     </span>
                 )}
                 <div className="min-w-0 flex-1" />

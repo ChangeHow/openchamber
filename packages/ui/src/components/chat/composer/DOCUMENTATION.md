@@ -234,9 +234,10 @@ scope reads the persisted runtime bucket only.
 
 ## BTW composer
 
-`/btw` only switches mode and prefills its argument. **Ask OpenChamber** does the
-same with Quote-formatted selection text. The first explicit send creates the
-fork; Enter follows the user's preference. Pending text and references then
+An empty `/btw` opens an unsent draft. `/btw <question>` opens BTW and sends
+that question immediately after its own draft and model selection are active.
+**By the way…** opens an unsent draft with Quote-formatted selection text.
+The first send creates the fork; Enter follows the user's preference. Pending text and references then
 move to the fork's draft identity. Normal and BTW drafts remain independent,
 including in memory when persistence is disabled.
 
@@ -244,16 +245,19 @@ Both modes reuse `ComposerEditor` and `ModelControls`; BTW transitions put the
 caret at the end. BTW copies the main model/effort once, including explicit
 Default, and uses `plan` or the first selectable agent. Its controlled model
 path only writes BTW selections. Attachments, goals, expansion, shell, and
-agent selection are unavailable. Auto-accept is applied before the first send.
+agent selection and file/agent mention autocomplete are unavailable. Auto-accept is applied before the first send.
 On mobile, model and effort controls sit in the input's upper-left row; the
 footer only contains auto-accept and send/stop controls.
 
 Escape closes menus first. Otherwise it returns to normal: an unsent BTW is
 discarded with its text, references, selections and panel; a creating or real
 fork is only collapsed. Neither exit sends, aborts, or deletes a server session,
-nor consumes the main draft's files, queue, or linked context.
+nor consumes the main draft's files, queue, or linked context. Pending snippet
+expansion belongs to the unsent panel. Discarding that panel invalidates the
+send, and a runtime change prevents fork creation and stale UI recovery.
 
-The panel hides titles. Promotion retains the existing internal title, without
+The unsent panel shows "Ask your question" until fork creation starts.
+Existing panels hide titles. Promotion retains the existing internal title, without
 transcript fetching or Small Model generation.
 
 ## Mobile

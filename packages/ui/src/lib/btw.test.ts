@@ -62,7 +62,7 @@ mock.module('@/sync/sync-refs', () => ({
   }),
 }));
 
-const { btwSessionTitle, startBtwSession, destroyBtwSession, promoteBtwSession, filterBtwTailMessages, findLastCompletedAssistantMessageID, BTW_BOUNDARY_INSTRUCTION, BTW_PROMOTION_NOTICE, buildBtwSyntheticTexts } =
+const { preparePendingBtwSend, btwSessionTitle, startBtwSession, destroyBtwSession, promoteBtwSession, filterBtwTailMessages, findLastCompletedAssistantMessageID, BTW_BOUNDARY_INSTRUCTION, BTW_PROMOTION_NOTICE, buildBtwSyntheticTexts } =
   await import('@/lib/btw');
 const { useBtwStore } = await import('@/stores/useBtwStore');
 const { useSelectionStore } = await import('@/sync/selection-store');
@@ -420,4 +420,56 @@ describe('buildBtwSyntheticTexts', () => {
   test('an ordinary session carries neither', () => {
     expect(buildBtwSyntheticTexts({ isBtwActive: false, isPromotedBtwSession: false })).toEqual([]);
   });
+});
+
+
+describe('pending BTW preparation', () => {
+  test('cancelling and reopening during snippet expansion cannot revive the old send', async () => {
+    const { getRuntimeKey } = await import('@/lib/runtime-switch');
+    const panels = useBtwStore.getState();
+    panels.setPanelState('parent-1', { pending: true });
+    let finish = () => {};
+    const expansion = new Promise<void>((resolve) => { finish = resolve; });
+    const preparing = preparePendingBtwSend('parent-1', getRuntimeKey(), () => expansion);
+    panels.clearPanelState('parent-1');
+    panels.setPanelState('parent-1', { pending: true });
+    finish();
+    expect(await preparing).toBeNull();
+    expect(useBtwStore.getState().byParent['parent-1']).toEqual({ pending: true });
+  });
+
+  test('preparation belongs to its parent and rejects duplicate sends', async () => {
+    const { getRuntimeKey } = await import('@/lib/runtime-switch');
+    const panels = useBtwStore.getState();
+    panels.setPanelState('parent-1', { pending: true });
+    panels.setPanelState('parent-2', { pending: true });
+    let finish = () => {};
+    const expansion = new Promise<void>((resolve) => { finish = resolve; });
+    const preparing = preparePendingBtwSend('parent-1', getRuntimeKey(), () => expansion);
+    expect(await preparePendingBtwSend('parent-1', getRuntimeKey(), async () => {})).toBeNull();
+    panels.clearPanelState('parent-2');
+    finish();
+    expect(await preparing).toBe(useBtwStore.getState().byParent['parent-1']?.pendingSend);
+  });
+
+  test('a stale composer cannot fork on the newly selected runtime', async () => {
+    await expect(startBtwSession({ ...startInput, expectedRuntimeKey: 'obsolete-runtime' }))
+      .rejects.toThrow('runtime changed');
+    expect(useBtwStore.getState().byParent).toEqual({});
+    expect(registeredDirectories).toEqual([]);
+  });
+});
+
+
+test('switching runtime during snippet expansion invalidates preparation', async () => {
+  const { getRuntimeKey, initializeRuntimeEndpoint } = await import('@/lib/runtime-switch');
+  const panels = useBtwStore.getState();
+  panels.setPanelState('parent-1', { pending: true });
+  let finish = () => {};
+  const expansion = new Promise<void>((resolve) => { finish = resolve; });
+  const preparing = preparePendingBtwSend('parent-1', getRuntimeKey(), () => expansion);
+  initializeRuntimeEndpoint({ apiBaseUrl: 'https://btw-test.invalid', runtimeKey: 'changed-during-preparation' });
+  finish();
+  expect(await preparing).toBeNull();
+  expect(useBtwStore.getState().byParent).toEqual({});
 });
