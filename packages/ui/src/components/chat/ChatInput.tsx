@@ -952,7 +952,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             identity: initialDraftIdentityRef.current,
         },
         onIdentityChange: () => setInputMode('normal'),
-        onDraftRestored: () => composerRef.current?.selectAll(),
+        onDraftRestored: (source) => {
+            if (source === 'fork') composerRef.current?.focus();
+            composerRef.current?.selectAll();
+        },
     });
 
     // Focus textarea when new session draft is opened
