@@ -239,6 +239,16 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
     expect(markup).toContain('aria-expanded="true"');
   });
 
+  test('streaming reasoning stays inside the capped nested scroll box', () => {
+    // The box is capped while streaming too, so a long thought scrolls inside
+    // its own box instead of growing the timeline; it is marked as a nested
+    // scroller so an upward wheel over it scrolls the box before the chat.
+    const markup = renderPart(makeReasoningPart({ start: 1_000 }), 'streaming');
+
+    expect(markup).toContain('max-h-80');
+    expect(markup).toContain('data-scrollable="true"');
+  });
+
   test('a live part with no committed text yet shows the busy header and no empty summary', () => {
     // The streaming early-return keeps the block mounted before the block-level
     // reveal commits a first line. The header must read as busy and must not

@@ -456,6 +456,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     );
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const newSessionDraftOpen = Boolean(newSessionDraft?.open);
+    const newSessionDraftAnnouncesDirtyState = newSessionDraftOpen && newSessionDraft?.openedAutomatically !== true;
     const draftPermissionAutoAcceptEnabled = useSessionUIStore((s) => (
         s.newSessionDraft?.open ? s.newSessionDraft.permissionAutoAcceptEnabled === true : false
     ));
@@ -952,7 +953,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             identity: initialDraftIdentityRef.current,
         },
         onIdentityChange: () => setInputMode('normal'),
-        onDraftRestored: () => composerRef.current?.selectAll(),
+        onDraftRestored: (source) => {
+            if (source === 'fork') composerRef.current?.focus();
+            composerRef.current?.selectAll();
+        },
     });
 
     // Focus textarea when new session draft is opened
@@ -3097,6 +3101,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                             selectedBranchLabel={selectedDraftBranchLabel}
                             selectedBranchIsKnown={selectedDraftBranchIsKnown}
                             hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
+                            announceDirtyState={newSessionDraftAnnouncesDirtyState}
                             projectRootBranchOption={projectRootBranchOption}
                             worktreeBranchOptions={worktreeBranchOptions}
                             branchItems={draftBranchItems}
@@ -3112,6 +3117,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         selectedProject={selectedDraftProject}
                         selectedBranchLabel={selectedDraftBranchLabel}
                         hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
+                            announceDirtyState={newSessionDraftAnnouncesDirtyState}
                         showBranchSelector={shouldShowDraftBranchSelector}
                         theme={currentTheme}
                         onOpenPicker={setMobileDraftPicker}
@@ -3528,6 +3534,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 selectedBranchLabel={selectedDraftBranchLabel}
                 selectedBranchIsKnown={selectedDraftBranchIsKnown}
                 hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
+                            announceDirtyState={newSessionDraftAnnouncesDirtyState}
                 projectRootBranchOption={projectRootBranchOption}
                 worktreeBranchOptions={worktreeBranchOptions}
                 branchItems={draftBranchItems}

@@ -183,16 +183,28 @@ and the send path reading the same grammar.
   draft. Two orderings are load-bearing: the debounced write is skipped once
   while a draft is being restored, and a deleted draft's empty signature is
   recorded before a queued write could resurrect it.
+  Fork replay text and files arrive in `input-store.pendingComposerRestore`,
+  addressed to the fork's runtime, directory, and session. The hook consumes
+  them after loading that identity's draft. Selection alone is not enough:
+  the deferred chat column can still show the source composer. Ordinary
+  pending text insertions keep their existing path in `ChatInput`.
 - `state/useDraftTarget.ts` — the draft can target a directory that does not
   exist yet (a worktree being created). It must survive not appearing in the
   branch list, or the selector snaps back to the project root mid-creation. It
   also owns the advisory dirty state for the selected directory, clearing it as
   soon as the target changes so a warning never names a previous branch.
 - `ui/DraftTargetSelectors.tsx` owns the controlled project/worktree picker
-  state and registers its application shortcuts locally. The selectors only
-  consume their shared prefix while the draft target UI is mounted. Keyboard
-  selection returns focus to the current form's composer, including when the
-  selected value is unchanged.
+  state and registers its application shortcuts locally. The desktop project
+  picker is a searchable popup: it ranks the current projects with
+  `rankByQuery` over display label and path, keeps the query and the active
+  result as transient local state that resets on every close, and commits
+  through the existing project-change flow only on explicit activation.
+  Filtering changes the result area below the anchored input without moving
+  the search field. The worktree picker remains a Select; mobile keeps its
+  bottom sheets. The selectors only consume their shared prefix while the
+  draft target UI is mounted.
+  Keyboard selection returns focus to the current form's composer, including
+  when the selected value is unchanged.
 - `ChatInput.tsx` maps Ctrl+N/P to the active command, skill, snippet, or
   mention picker after its IME guard.
 
