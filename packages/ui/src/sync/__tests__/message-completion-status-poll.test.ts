@@ -15,9 +15,12 @@ type StatusSnapshot = Record<string, SessionStatus | undefined>
 
 let respondWithSnapshot: () => Promise<StatusSnapshot | null> = () => Promise.resolve({ ses_1: { type: "idle" } })
 const statusSnapshotCalls: string[] = []
+let runtimeKey = "test-runtime"
+let sdkIdentity = {}
 
 mock.module("@/lib/opencode/client", () => ({
   opencodeClient: {
+    getSdkClient: () => sdkIdentity,
     getSessionStatusForDirectory: mock((directory: string) => {
       statusSnapshotCalls.push(directory)
       return respondWithSnapshot()
@@ -26,8 +29,12 @@ mock.module("@/lib/opencode/client", () => ({
 }))
 
 mock.module("@/lib/runtime-switch", () => ({
-  getRuntimeKey: () => "test-runtime",
+  getRuntimeKey: () => runtimeKey,
 }))
+
+import { applyGlobalSessionStatusSnapshot, useGlobalSessionStatusStore } from "../global-session-status"
+import { useSessionOrderingStore } from "../session-ordering"
+import { useSessionActivityTimingStore } from "../session-activity-timing"
 
 import {
   maybePollStatusAfterMessageCompletion,
@@ -78,6 +85,8 @@ describe("maybePollStatusAfterMessageCompletion (issue OPE-193)", () => {
   beforeEach(() => {
     respondWithSnapshot = () => Promise.resolve({ ses_1: { type: "idle" } })
     statusSnapshotCalls.length = 0
+    runtimeKey = "test-runtime"
+    sdkIdentity = {}
   })
 
   test("does not poll when the store believes the session is already idle", async () => {
@@ -183,4 +192,36 @@ describe("maybePollStatusAfterMessageCompletion (issue OPE-193)", () => {
     expect(part?.type).toBe("tool")
     if (part?.type === "tool") expect(part.state.status).toBe("error")
   })
+
+  for (const change of ["runtime", "sdk", "request"] as const) {
+    test(`discards delayed recovery after ${change} ownership changes`, async () => {
+      const store = createStore()
+      store.getState().patch({
+        message: { ses_1: [unfinishedAssistant] },
+        part: { msg_1: [runningTool] },
+      })
+      const before = store.getState()
+      let resolveSnapshot: (snapshot: StatusSnapshot) => void = () => { throw new Error("Request not started") }
+      respondWithSnapshot = () => new Promise((resolve) => { resolveSnapshot = resolve })
+      let stale = false
+      const recovery = recoverInterruptedTurnAfterMessageLoad("/test/project", store, "ses_1", () => stale)
+      expect(statusSnapshotCalls).toEqual(["/test/project"])
+
+      if (change === "runtime") runtimeKey = "runtime-b"
+      if (change === "sdk") sdkIdentity = {}
+      if (change === "request") stale = true
+      applyGlobalSessionStatusSnapshot("/test/project", { ses_new: { type: "busy" } })
+      const statuses = useGlobalSessionStatusStore.getState()
+      const ordering = useSessionOrderingStore.getState()
+      const timing = useSessionActivityTimingStore.getState()
+      resolveSnapshot({ ses_old: { type: "busy" } })
+      await recovery
+
+      expect(store.getState()).toBe(before)
+      expect(useGlobalSessionStatusStore.getState()).toBe(statuses)
+      expect(useSessionOrderingStore.getState()).toBe(ordering)
+      expect(useSessionActivityTimingStore.getState()).toBe(timing)
+    })
+  }
+
 })
