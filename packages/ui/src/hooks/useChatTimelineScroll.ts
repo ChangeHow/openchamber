@@ -11,7 +11,7 @@ import {
     getRowBottom,
     resolveRealContentEndOffset,
     resolveTimelineIsAtEnd,
-    TIMELINE_FOLLOW_REARM_THRESHOLD_PX,
+    resolveFollowRearmThresholdPx,
     type TimelineListMeasurementState,
     type TimelineScrollMode,
 } from '@/components/chat/lib/scroll/timelineScrollAnchoring';
@@ -102,6 +102,7 @@ export interface UseChatTimelineScrollResult {
     onAnchorReady: (messageId: string, anchorIndex: number) => void;
     onAnchorSizeChanged: (messageId: string) => void;
     onIsAtEndChange: (isAtEnd: boolean) => void;
+    onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
     onManualNavigation: () => void;
     onTimelineDataChange: () => void;
     showScrollButton: boolean;
@@ -179,6 +180,12 @@ export const useChatTimelineScroll = ({
 
     const composerOverlayHeightRef = React.useRef(composerOverlayHeight);
     composerOverlayHeightRef.current = composerOverlayHeight;
+    // Size of the list footer, reported by the list as it is measured; the
+    // real content end sits below the last row by this much.
+    const listFooterSizeRef = React.useRef(0);
+    const onListMetricsChange = React.useCallback((metrics: { readonly footerSize: number }) => {
+        listFooterSizeRef.current = Number.isFinite(metrics.footerSize) ? metrics.footerSize : 0;
+    }, []);
     const sessionMessageCountRef = React.useRef(sessionMessageCount);
     sessionMessageCountRef.current = sessionMessageCount;
     const currentSessionIdRef = React.useRef(currentSessionId);
@@ -575,16 +582,17 @@ export const useChatTimelineScroll = ({
         first: null,
         second: null,
     });
-    // While the list width is resizing, every pinning write fights the
-    // per-frame row re-measure and the pinned viewport shakes. Corrections
-    // stand down for the whole resize and the visible content is held by the
-    // list's size compensation instead. Deliberately NO snap back to the end
-    // afterwards for a mid-conversation reader: a slow drag settles
-    // repeatedly, and each snap reads as the very jump this suspension
-    // removes. A reader pinned to a STREAMING session is the exception — the
-    // live edge is what they are watching, so the end is re-asserted once on
-    // settle. A pinned reader of an idle session gets no scroll at all: if the
-    // re-wrap moved the viewport off the end, the pin is released instead.
+    // While the list width is resizing every row re-wraps, and the list's
+    // total content length lags a frame behind the rows it contains: it
+    // still carries pre-wrap row sizes, so any end computed from it (the
+    // list's own maintainScrollAtEnd, the scroll node's scrollHeight) lands
+    // on a blank tail or short of the real end and the viewport bounces.
+    // A pinned reader — streaming or idle — stays on the end throughout: the
+    // pinned-end observer below re-asserts the MEASURED end of the last real
+    // row on every layout write, and once the resize settles the end is
+    // asserted one last time against the same measurement. An unpinned
+    // reader is held in place by the list's size compensation instead and
+    // is never scrolled.
     const widthResizingRef = React.useRef(false);
     React.useEffect(() => {
         if (!scrollNode || typeof ResizeObserver === 'undefined') return;
@@ -605,45 +613,20 @@ export const useChatTimelineScroll = ({
                 quietTimer = null;
                 widthResizingRef.current = false;
                 if (!isAtEndRef.current || pendingAnchorRef.current !== null) return;
-                if (!sessionIsWorkingRef.current) {
-                    // An idle pinned reader asked for nothing — a width change
-                    // must not scroll them. If the re-wrap left the viewport
-                    // off the end, release the pin instead of snapping back;
-                    // the scroll-to-bottom pill offers the way home.
-                    const listState = listRef.current?.getState();
-                    const atEndNow = listState ? resolveTimelineIsAtEnd(listState) : undefined;
-                    if (atEndNow === false) {
-                        isAtEndRef.current = false;
-                        setIsPinned(false);
-                        modeRef.current = 'free-scrolling';
-                        liveFollowGenerationRef.current = null;
-                        scheduleShowScrollButton();
-                        queueSave();
-                    }
-                    return;
-                }
-                {
-                    // A streaming session keeps its live edge in view, so the
-                    // end is re-asserted once on settle.
-                    // Not scrollToEnd: the list's end offset comes from the
-                    // total content length, which still carries pre-wrap row
-                    // sizes (and any reserved anchored end space) right after a
-                    // width change. Landing there parks the last row near the
-                    // top of the viewport with a blank tail below it. Target
-                    // the measured bottom of the last real row instead.
-                    const list = listRef.current;
-                    const state = list?.getState();
-                    const offset = state
-                        ? resolveRealContentEndOffset({
-                            state,
-                            composerOverlayHeight: composerOverlayHeightRef.current,
-                        })
-                        : null;
-                    if (list && offset !== null) {
-                        void list.scrollToOffset({ offset, animated: false });
-                    } else {
-                        void list?.scrollToEnd({ animated: false });
-                    }
+                if (userOwnsScrollRef.current || modeRef.current !== 'following-end') return;
+                const list = listRef.current;
+                const state = list?.getState();
+                const offset = state
+                    ? resolveRealContentEndOffset({
+                        state,
+                        composerOverlayHeight: composerOverlayHeightRef.current,
+                        footerSize: listFooterSizeRef.current,
+                    })
+                    : null;
+                if (list && offset !== null) {
+                    void list.scrollToOffset({ offset, animated: false });
+                } else {
+                    void list?.scrollToEnd({ animated: false });
                 }
             }, 350);
         });
@@ -652,7 +635,7 @@ export const useChatTimelineScroll = ({
             observer.disconnect();
             if (quietTimer !== null) clearTimeout(quietTimer);
         };
-    }, [queueSave, scheduleShowScrollButton, scrollNode]);
+    }, [scrollNode]);
 
     // Keep the live edge in view after content growth. Within a viewport of
     // the end the remaining distance is glided so a revealed block and the
@@ -699,6 +682,7 @@ export const useChatTimelineScroll = ({
                     const offset = resolveRealContentEndOffset({
                         state,
                         composerOverlayHeight: composerOverlayHeightRef.current,
+                        footerSize: listFooterSizeRef.current,
                         extraInset: CHAT_LIST_ANCHOR_OFFSET,
                     });
                     if (offset !== null) {
@@ -723,7 +707,7 @@ export const useChatTimelineScroll = ({
                 const lastBottom = lastIndex >= 0 ? getRowBottom(state, lastIndex) : null;
                 if (lastBottom !== null) {
                     const visibleBottom = state.scroll + state.scrollLength - composerOverlayHeightRef.current;
-                    if (lastBottom - visibleBottom > TIMELINE_FOLLOW_REARM_THRESHOLD_PX) {
+                    if (lastBottom - visibleBottom > resolveFollowRearmThresholdPx(state.scrollLength)) {
                         isAtEndRef.current = false;
                         setIsPinned(false);
                         scheduleShowScrollButton();
@@ -933,18 +917,33 @@ export const useChatTimelineScroll = ({
     // sits on the end of a session that is not producing output, any growth
     // of the content (a footer that decides to render, a row re-measured)
     // keeps the end in view with one instant write. Output growth belongs to
-    // followEnd, which glides.
+    // followEnd, which glides. A width resize is the one case handled for a
+    // streaming reader as well — see the resize observer above.
     React.useEffect(() => {
         if (!scrollNode || typeof MutationObserver === 'undefined') return;
         const content = scrollNode.firstElementChild;
         if (!content) return;
         const pin = () => {
-            if (sessionIsWorkingRef.current) return;
-            // A width resize re-wraps every row; pinning against each mutation
-            // scrolls the idle reader around. The resize settle handler above
-            // decides whether the pin survives the resize.
-            if (widthResizingRef.current) return;
             if (userOwnsScrollRef.current || !isAtEndRef.current || modeRef.current !== 'following-end') return;
+            if (widthResizingRef.current) {
+                // Re-wrapping rows: the scroll node's scrollHeight carries the
+                // list's stale total, so the end is the measured bottom of the
+                // last real row. Held for a streaming reader too — output
+                // growth is not what moves the viewport during a resize.
+                const state = listRef.current?.getState();
+                const offset = state
+                    ? resolveRealContentEndOffset({
+                        state,
+                        composerOverlayHeight: composerOverlayHeightRef.current,
+                        footerSize: listFooterSizeRef.current,
+                    })
+                    : null;
+                if (offset !== null && Math.abs(offset - scrollNode.scrollTop) > 1) {
+                    scrollNode.scrollTop = offset;
+                }
+                return;
+            }
+            if (sessionIsWorkingRef.current) return;
             const end = scrollNode.scrollHeight - scrollNode.clientHeight;
             if (end - scrollNode.scrollTop > 1) scrollNode.scrollTop = end;
         };
@@ -1079,6 +1078,7 @@ export const useChatTimelineScroll = ({
         onAnchorReady,
         onAnchorSizeChanged,
         onIsAtEndChange,
+        onListMetricsChange,
         onManualNavigation,
         onTimelineDataChange,
         showScrollButton,

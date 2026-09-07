@@ -223,6 +223,16 @@ describe('resolveRealContentEndOffset', () => {
         })).toBe(696);
     });
 
+    test('counts the footer rendered after the last row as real content', () => {
+        const state = buildState({
+            positions: [0, 1000],
+            sizes: [1000, 200],
+            scrollLength: 700,
+        });
+
+        expect(resolveRealContentEndOffset({ state, composerOverlayHeight: 180, footerSize: 120 })).toBe(800);
+    });
+
     test('returns null for an empty timeline and for unmeasured last rows', () => {
         expect(resolveRealContentEndOffset({
             state: buildState({ positions: [], sizes: [] }),
@@ -237,10 +247,13 @@ describe('resolveRealContentEndOffset', () => {
 });
 
 describe('resolveTimelineIsAtEnd', () => {
-    test('uses a tight distance band against the full content length', () => {
+    test('counts half a viewport from the full content length as the end', () => {
         expect(resolveTimelineIsAtEnd({ contentLength: 2000, scroll: 1400, scrollLength: 600 })).toBe(true);
-        expect(resolveTimelineIsAtEnd({ contentLength: 2000, scroll: 1365, scrollLength: 600 })).toBe(true);
-        expect(resolveTimelineIsAtEnd({ contentLength: 2000, scroll: 1300, scrollLength: 600 })).toBe(false);
+        expect(resolveTimelineIsAtEnd({ contentLength: 2000, scroll: 1100, scrollLength: 600 })).toBe(true);
+        expect(resolveTimelineIsAtEnd({ contentLength: 2000, scroll: 1099, scrollLength: 600 })).toBe(false);
+        // Tiny viewports keep a 40px floor.
+        expect(resolveTimelineIsAtEnd({ contentLength: 2000, scroll: 1900, scrollLength: 60 })).toBe(true);
+        expect(resolveTimelineIsAtEnd({ contentLength: 2000, scroll: 1899, scrollLength: 60 })).toBe(false);
     });
 
     test('falls back to the list flags when distances are unavailable', () => {

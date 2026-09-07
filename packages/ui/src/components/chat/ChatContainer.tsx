@@ -175,6 +175,7 @@ type ChatViewportProps = {
     onAnchorReady: (messageId: string, anchorIndex: number) => void;
     onAnchorSizeChanged: (messageId: string) => void;
     onIsAtEndChange: (isAtEnd: boolean) => void;
+    onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
     onTimelineDataChange: () => void;
     renderedMessages: SessionMessageRecord[];
     isLoadingOlder: boolean;
@@ -219,6 +220,7 @@ const ChatViewport = React.memo(({
     onAnchorReady,
     onAnchorSizeChanged,
     onIsAtEndChange,
+    onListMetricsChange,
     onTimelineDataChange,
     renderedMessages,
     isLoadingOlder,
@@ -507,6 +509,7 @@ const ChatViewport = React.memo(({
                     // again produced a double-tall blank band at rest.
                     composerOverlayHeight={0}
                     onIsAtEndChange={onIsAtEndChange}
+                    onListMetricsChange={onListMetricsChange}
                     onTimelineDataChange={onTimelineDataChange}
                     listHeader={listHeader}
                     listFooter={listFooter}
@@ -543,6 +546,7 @@ const ChatViewport = React.memo(({
         && prev.activeStreamingPhase === next.activeStreamingPhase
         && prev.retryOverlay === next.retryOverlay
         && prev.scrollToBottom === next.scrollToBottom
+        && prev.onListMetricsChange === next.onListMetricsChange
         && prev.endPinningReleased === next.endPinningReleased
         && prev.revealWaited === next.revealWaited
         && prev.revealGate === next.revealGate
@@ -1124,6 +1128,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         onAnchorReady,
         onAnchorSizeChanged,
         onIsAtEndChange,
+        onListMetricsChange,
         onManualNavigation,
         onTimelineDataChange,
         goToBottom,
@@ -1553,6 +1558,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 onAnchorReady={onAnchorReady}
                 onAnchorSizeChanged={onAnchorSizeChanged}
                 onIsAtEndChange={onIsAtEndChange}
+                onListMetricsChange={onListMetricsChange}
                 onTimelineDataChange={onTimelineDataChange}
                 messageListRef={messageListRef}
                 renderedMessages={timelineController.renderedMessages}

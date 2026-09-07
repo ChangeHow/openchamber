@@ -331,6 +331,7 @@ interface MessageListProps {
     onAnchorSizeChanged?: (messageId: string) => void;
     composerOverlayHeight?: number;
     onIsAtEndChange?: (isAtEnd: boolean) => void;
+    onListMetricsChange?: (metrics: { readonly footerSize: number }) => void;
     onTimelineDataChange?: () => void;
     // Content that used to sit as siblings of the list inside the scroll
     // container. The list owns that container now, so they render as its
@@ -959,6 +960,7 @@ type TimelineListProps = {
     };
     composerOverlayHeight: number;
     onIsAtEndChange: (isAtEnd: boolean) => void;
+    onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
     onTimelineDataChange: () => void;
     listHeader?: React.ReactNode;
     listFooter?: React.ReactNode;
@@ -973,6 +975,7 @@ const TimelineList = React.memo(({
     anchoredEndSpace,
     composerOverlayHeight,
     onIsAtEndChange,
+    onListMetricsChange,
     onTimelineDataChange,
     listHeader,
     listFooter,
@@ -1068,29 +1071,30 @@ const TimelineList = React.memo(({
                 contentInsetEndAdjustment={composerOverlayHeight}
                 // While a turn is anchored, the reserved end space — not the
                 // live edge — defines where the viewport rests.
-                // Also released while the width resizes: re-pinning against
-                // rows that are still re-measuring shakes the pinned
-                // viewport; once the resize settles the owning hook
-                // re-asserts the end for a streaming session and releases
-                // the pin for an idle one.
-                maintainScrollAtEnd={anchoredEndSpace || !streamingAutoFollowEnabled || isWidthResizing || endPinningReleased
+                // Live only while the session streams: outside a stream the
+                // owning hook keeps a pinned reader on the end with same-frame
+                // writes, and the list's own correction runs a frame later
+                // against a content length that can still be stale (a
+                // re-wrap, a late measurement) — that is the visible bounce
+                // an idle reader saw on every panel toggle. Also off while the
+                // width resizes, where the hook holds the measured end itself.
+                maintainScrollAtEnd={anchoredEndSpace || !streamingAutoFollowEnabled || !rowContext.sessionIsWorking || isWidthResizing || endPinningReleased
                     ? false
-                    // Animated only while the session actively streams: there
-                    // the block-step growth turns each correction into a glide
-                    // and reveal + scroll read as one motion. Outside of a live
-                    // stream — opening a historical session, late measurements —
-                    // corrections must be instant: an animated catch-up scrolls
-                    // visibly through the whole conversation on open, and an
-                    // in-flight glide can supersede explicit navigation.
+                    // Animated: the block-step growth turns each correction
+                    // into a glide and reveal + scroll read as one motion.
                     : {
-                        animated: rowContext.sessionIsWorking,
+                        animated: true,
                         on: { dataChange: true, itemLayout: true, layout: true, footerLayout: true },
                     }}
                 // Prepending older history must not move what the user is
                 // reading. Size restoration applies only during a width
-                // resize — see the observer above.
-                maintainVisibleContentPosition={{ data: true, size: isWidthResizing }}
+                // resize (see the observer above) and only for a reader who
+                // left the end: a pinned reader is held on the end by the
+                // owning hook, and compensating the rows above them would pull
+                // the viewport away from it.
+                maintainVisibleContentPosition={{ data: true, size: isWidthResizing && endPinningReleased }}
                 onScroll={handleScroll}
+                onMetricsChange={onListMetricsChange}
                 ListHeaderComponent={header}
                 ListFooterComponent={footer}
                 {...scrollContainerProps}
@@ -1188,6 +1192,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     onAnchorSizeChanged,
     composerOverlayHeight = 0,
     onIsAtEndChange,
+    onListMetricsChange,
     onTimelineDataChange,
     listHeader,
     listFooter,
@@ -1433,6 +1438,10 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
     const stableTimelineDataChange = useStableEvent(() => {
         onTimelineDataChange?.();
+    });
+
+    const stableListMetricsChange = useStableEvent((metrics: { readonly footerSize: number }) => {
+        onListMetricsChange?.(metrics);
     });
 
     const currentUserOrder = React.useMemo(() => {
@@ -1862,6 +1871,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                 anchoredEndSpace={anchoredEndSpace}
                 composerOverlayHeight={composerOverlayHeight}
                 onIsAtEndChange={stableIsAtEndChange}
+                onListMetricsChange={stableListMetricsChange}
                 onTimelineDataChange={stableTimelineDataChange}
                 listHeader={listHeader}
                 listFooter={listFooter}

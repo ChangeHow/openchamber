@@ -115,13 +115,19 @@ export const getAnchoredTurnMetrics = ({
 // have not been re-measured yet. Scrolling to it then lands below the real
 // content and leaves a blank tail. `extraInset` reserves additional slack
 // below the content when a caller wants the row to sit clear of the edge.
+// The list footer (question and permission cards, error notices, the tail
+// spacer) renders after the last row and is part of the real content, unlike
+// reserved anchored end space; the list does not expose its size through
+// getState, so the caller passes the last reported value.
 export const resolveRealContentEndOffset = ({
     state,
     composerOverlayHeight,
+    footerSize = 0,
     extraInset = 0,
 }: {
     readonly state: TimelineListMeasurementState;
     readonly composerOverlayHeight: number;
+    readonly footerSize?: number;
     readonly extraInset?: number;
 }): number | null => {
     const lastIndex = state.data.length - 1;
@@ -129,16 +135,21 @@ export const resolveRealContentEndOffset = ({
     const lastBottom = getRowBottom(state, lastIndex);
     if (lastBottom === null) return null;
     const visibleLength = Math.max(0, state.scrollLength - composerOverlayHeight - extraInset);
-    return Math.max(0, lastBottom - visibleLength);
+    return Math.max(0, lastBottom + Math.max(0, footerSize) - visibleLength);
 };
 
-// "At the end" for follow purposes is a tight band, not the list's isNearEnd
-// (half a viewport): that band hid the scroll-to-bottom pill and re-armed
-// follow while the user had genuinely scrolled away, yanking them back on the
-// next stream chunk. Distance is measured against the full content length —
-// reserved anchored end space included — so a parked anchored turn counts as
-// the live edge.
-export const TIMELINE_FOLLOW_REARM_THRESHOLD_PX = 40;
+// "At the end" for follow purposes is half a viewport. Leaving the end is
+// only ever decided by a real gesture, so this band never yanks a reader who
+// is still on the end; what it decides is how close to the live edge a reader
+// who scrolled away must come back before follow re-arms and the pill hides.
+// Half a screen reads as "I am back at the bottom" without having to land on
+// the last pixel, and stray row growth or late measurements cannot push a
+// pinned reader out of it. Distance is measured against the full content
+// length — reserved anchored end space included — so a parked anchored turn
+// counts as the live edge.
+const FOLLOW_REARM_MIN_THRESHOLD_PX = 40;
+export const resolveFollowRearmThresholdPx = (scrollLength: number): number =>
+    Math.max(FOLLOW_REARM_MIN_THRESHOLD_PX, scrollLength / 2);
 
 export const resolveTimelineIsAtEnd = (
     state: {
@@ -157,7 +168,7 @@ export const resolveTimelineIsAtEnd = (
         && typeof scrollLength === 'number'
         && Number.isFinite(contentLength)
     ) {
-        return contentLength - (scroll + scrollLength) <= TIMELINE_FOLLOW_REARM_THRESHOLD_PX;
+        return contentLength - (scroll + scrollLength) <= resolveFollowRearmThresholdPx(scrollLength);
     }
     return state.isNearEnd ?? state.isAtEnd;
 };
