@@ -26,7 +26,8 @@ const AUTH = JSON.stringify({
 ((fs as unknown) as { existsSync: () => boolean }).existsSync = () => true;
 ((fs as unknown) as { readFileSync: () => string }).readFileSync = () => AUTH;
 
-import { fetchHyperQuota, fetchQuotaForProvider } from './quotaProviders';
+import { fetchHyperQuota, fetchOllamaCloudQuota, fetchQuotaForProvider } from './quotaProviders';
+import { validateCredential } from './quotaCredentials';
 
 type MockResponseInit = { ok?: boolean; status?: number };
 
@@ -720,6 +721,104 @@ describe('DeepSeek quota provider (VS Code parity)', () => {
     const fsMock = fs as unknown as { existsSync: unknown; readFileSync: unknown };
     fsMock.existsSync = ORIGINAL_FS.existsSync;
     fsMock.readFileSync = ORIGINAL_FS.readFileSync;
+  });
+});
+
+describe('Ollama Cloud quota validation and refresh', () => {
+  const credential = { cookie: 'test-ollama-cookie' };
+  const readCookie = () => credential.cookie;
+
+  for (const { html, expected } of [
+    { html: '<h1>Monthly usage</h1><p>$25.00 of $100.00</p>', expected: { monthly: { usedPercent: 25, valueLabel: '$25.00 / $100.00' } } },
+    { html: 'Monthly usage $1,250.00 of $2,500.00', expected: { monthly: { usedPercent: 50, valueLabel: '$1,250.00 / $2,500.00' } } },
+    { html: 'Session usage 12% Weekly usage 34% Premium 2 / 10', expected: { session: { usedPercent: 12 }, weekly: { usedPercent: 34 }, premium: { usedPercent: 20, valueLabel: '2 / 10' } } },
+    { html: 'Monthly usage $0 of $100 Balance remaining $5.25 Add $5', expected: { monthly: { usedPercent: 0, valueLabel: '$0 / $100' }, credits_balance: { usedPercent: null, valueLabel: '$5.25' } } },
+    { html: 'Monthly usage $0 of $100 Balance remaining $0.00 Add $5', expected: { monthly: { usedPercent: 0, valueLabel: '$0 / $100' } } },
+    { html: 'Monthly usage $125 of $100 Add $5', expected: { monthly: { usedPercent: 100, valueLabel: '$125 / $100' } } },
+  ]) {
+    test(`accepts and displays ${html}`, async () => {
+      let requests = 0;
+      const fetchImpl = async (url: string, init: RequestInit) => {
+        requests += 1;
+        assert.equal(url, 'https://ollama.com/settings');
+        assert.equal(init.redirect, 'manual');
+        assert.equal(init.method, 'GET');
+        assert.equal(new Headers(init.headers).get('Cookie'), credential.cookie);
+        assert.ok(init.signal instanceof AbortSignal);
+        return new Response(html);
+      };
+      await validateCredential('ollama-cloud', credential, fetchImpl);
+      const result = await fetchOllamaCloudQuota({ readCookie, fetchImpl });
+      assert.equal(requests, 2);
+      assert.equal(result.ok, true);
+      assert.ok(result.usage);
+      assert.deepEqual(Object.keys(result.usage.windows), Object.keys(expected));
+      for (const [key, expectedWindow] of Object.entries(expected)) {
+        const window: NonNullable<typeof result.usage>['windows'][string] = result.usage.windows[key];
+        assert.ok(window);
+        assert.equal(window.usedPercent, expectedWindow.usedPercent);
+        if ('valueLabel' in expectedWindow) assert.equal(window.valueLabel, expectedWindow.valueLabel);
+        assert.equal(window.resetAt, null);
+      }
+      assert.equal(JSON.stringify(result).includes(credential.cookie), false);
+    });
+  }
+
+  for (const html of ['', '<h1>Monthly usage</h1>', 'Session usage', 'Session usage 1.2.3%', 'Weekly usage 1.2.3%', 'Add $5', 'Monthly usage $1.2.3 of $100', 'Balance remaining $1.2.3']) {
+    test(`rejects unparseable HTML ${JSON.stringify(html)} in both consumers`, async () => {
+      const fetchImpl = async () => new Response(html);
+      await assert.rejects(validateCredential('ollama-cloud', credential, fetchImpl), /usage data could not be parsed/);
+      const result = await fetchOllamaCloudQuota({ readCookie, fetchImpl });
+      assert.equal(result.ok, false);
+      assert.equal(result.configured, true);
+      assert.equal(result.usage, null);
+      assert.equal(result.error, 'Ollama Cloud usage data could not be parsed');
+    });
+  }
+
+  for (const status of [302, 307, 401, 403, 429, 500]) {
+    test(`rejects HTTP ${status} in both consumers`, async () => {
+      const fetchImpl = async () => new Response('Monthly usage $25 of $100', { status });
+      await assert.rejects(validateCredential('ollama-cloud', credential, fetchImpl), /authentication failed/);
+      const result = await fetchOllamaCloudQuota({ readCookie, fetchImpl });
+      assert.equal(result.ok, false);
+      assert.equal(result.usage, null);
+      assert.equal(result.error, 'Ollama Cloud authentication failed');
+    });
+  }
+
+  for (const failure of [new DOMException('Request timed out', 'TimeoutError'), new Error('Network unavailable')]) {
+    test(`reports ${failure.message} in both consumers`, async () => {
+      const fetchImpl = async () => { throw failure; };
+      await assert.rejects(validateCredential('ollama-cloud', credential, fetchImpl), failure);
+      const result = await fetchOllamaCloudQuota({ readCookie, fetchImpl });
+      assert.equal(result.ok, false);
+      assert.equal(result.usage, null);
+      assert.equal(result.error, failure.message);
+    });
+  }
+
+  test('does not request usage without a cookie', async () => {
+    const result = await fetchOllamaCloudQuota({ readCookie: () => undefined, fetchImpl: async () => { assert.fail('Unexpected request'); } });
+    assert.equal(result.configured, false);
+    assert.equal(result.ok, false);
+  });
+
+  test('reports response body failures in both consumers', async () => {
+    const failure = new Error('Response body interrupted');
+    const fetchImpl = async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(failure);
+      },
+    }));
+
+    await assert.rejects(validateCredential('ollama-cloud', credential, fetchImpl), failure);
+    const result = await fetchOllamaCloudQuota({ readCookie, fetchImpl });
+    assert.equal(result.ok, false);
+    assert.equal(result.configured, true);
+    assert.equal(result.usage, null);
+    assert.equal(result.error, failure.message);
+    assert.deepEqual(credential, { cookie: 'test-ollama-cookie' });
   });
 });
 
