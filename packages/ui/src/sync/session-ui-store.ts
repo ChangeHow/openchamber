@@ -327,6 +327,8 @@ export type NewSessionDraftState = {
   projectContextPins?: { notes: string[]; plans: string[] }
   target: NewSessionDraftTarget
   preparedChatDirectory?: string | null
+  /** Opened as a programmatic fallback (no session active at boot), not by the user. */
+  openedAutomatically?: boolean
 }
 
 export type ViewportAnchor = {
@@ -1280,6 +1282,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       syntheticParts: options?.syntheticParts,
       targetFolderId: options?.targetFolderId,
       projectContextPins: options?.projectContextPins,
+      openedAutomatically: options?.automatic === true,
     }
 
     set({

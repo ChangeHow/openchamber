@@ -46,6 +46,14 @@ export interface DraftTargetProps {
     selectedBranchLabel: string | null;
     selectedBranchIsKnown: boolean;
     hasUncommittedChanges: boolean;
+    /**
+     * Whether the dirty warning may announce itself by opening its tooltip
+     * unprompted. Off for a draft the app opened on its own at boot: that
+     * draft is often only a placeholder until the last session restores, and
+     * a tooltip on an otherwise empty screen reads as a glitch. The warning
+     * icon still shows and the tooltip stays reachable by hover or long press.
+     */
+    announceDirtyState: boolean;
     projectRootBranchOption: BranchOption | null;
     worktreeBranchOptions: readonly BranchOption[];
     branchItems: readonly BranchOption[];
@@ -100,26 +108,27 @@ const DIRTY_TOOLTIP_FLASH_MS = 5000;
 /**
  * Opens the tooltip for a few seconds when the dirty state first appears, so
  * the warning is seen without hovering, then hands control back to hover.
+ * Only when the draft may announce itself — see `announceDirtyState`.
  */
-function useDirtyFlashTooltip(hasUncommittedChanges: boolean) {
+function useDirtyFlashTooltip(hasUncommittedChanges: boolean, announce: boolean) {
     const [open, setOpen] = React.useState(false);
 
     React.useEffect(() => {
-        if (!hasUncommittedChanges) {
+        if (!hasUncommittedChanges || !announce) {
             setOpen(false);
             return;
         }
         setOpen(true);
         const timer = window.setTimeout(() => setOpen(false), DIRTY_TOOLTIP_FLASH_MS);
         return () => window.clearTimeout(timer);
-    }, [hasUncommittedChanges]);
+    }, [announce, hasUncommittedChanges]);
 
     return { open, onOpenChange: setOpen };
 }
 
 export function DraftTargetSelectors(props: DraftTargetProps) {
     const { t } = useI18n();
-    const dirtyTooltip = useDirtyFlashTooltip(props.hasUncommittedChanges);
+    const dirtyTooltip = useDirtyFlashTooltip(props.hasUncommittedChanges, props.announceDirtyState);
     const {
         projects,
         selectedProject,
@@ -271,12 +280,12 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
 
 /** Mobile: buttons that open the bottom sheets below. */
 export function MobileDraftTargetTriggers(
-    props: Pick<DraftTargetProps, 'selectedProject' | 'selectedBranchLabel' | 'showBranchSelector' | 'hasUncommittedChanges' | 'theme'>
+    props: Pick<DraftTargetProps, 'selectedProject' | 'selectedBranchLabel' | 'showBranchSelector' | 'hasUncommittedChanges' | 'announceDirtyState' | 'theme'>
         & { onOpenPicker: (picker: 'project' | 'branch') => void },
 ) {
     const { t } = useI18n();
-    const { selectedProject, selectedBranchLabel, showBranchSelector, hasUncommittedChanges, theme, onOpenPicker } = props;
-    const dirtyTooltip = useDirtyFlashTooltip(hasUncommittedChanges);
+    const { selectedProject, selectedBranchLabel, showBranchSelector, hasUncommittedChanges, announceDirtyState, theme, onOpenPicker } = props;
+    const dirtyTooltip = useDirtyFlashTooltip(hasUncommittedChanges, announceDirtyState);
 
     return (
         <div className="mb-1.5 flex min-w-0 items-center gap-x-2 px-0.5">
