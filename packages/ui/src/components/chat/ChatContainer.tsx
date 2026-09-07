@@ -171,9 +171,6 @@ type ChatViewportProps = {
     scrollRef: React.RefObject<HTMLDivElement | null>;
     messageListRef: React.RefObject<MessageListHandle | null>;
     registerList: (list: TimelineListHandle | null) => void;
-    anchorMessageId: string | null;
-    onAnchorReady: (messageId: string, anchorIndex: number) => void;
-    onAnchorSizeChanged: (messageId: string) => void;
     onIsAtEndChange: (isAtEnd: boolean) => void;
     onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
     onTimelineDataChange: () => void;
@@ -216,9 +213,6 @@ const ChatViewport = React.memo(({
     scrollRef,
     messageListRef,
     registerList,
-    anchorMessageId,
-    onAnchorReady,
-    onAnchorSizeChanged,
     onIsAtEndChange,
     onListMetricsChange,
     onTimelineDataChange,
@@ -501,9 +495,6 @@ const ChatViewport = React.memo(({
                     endPinningReleased={endPinningReleased}
                     directory={directory}
                     registerList={registerList}
-                    anchorMessageId={anchorMessageId}
-                    onAnchorReady={onAnchorReady}
-                    onAnchorSizeChanged={onAnchorSizeChanged}
                     // Zero end inset: the footer spacer already reserves the
                     // zone the floating status row covers; adding its height
                     // again produced a double-tall blank band at rest.
@@ -1110,23 +1101,10 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         statusOverlayObserverRef.current?.disconnect();
         statusOverlayObserverRef.current = null;
     }, []);
-    const lastUserMessageId = React.useMemo(() => {
-        for (let index = sessionMessages.length - 1; index >= 0; index -= 1) {
-            const message = sessionMessages[index];
-            if (message.info.role === 'user') {
-                return message.info.id;
-            }
-        }
-        return null;
-    }, [sessionMessages]);
-
     const {
         scrollRef,
         scrollNode,
         registerList,
-        anchorMessageId,
-        onAnchorReady,
-        onAnchorSizeChanged,
         onIsAtEndChange,
         onListMetricsChange,
         onManualNavigation,
@@ -1143,7 +1121,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         currentSessionKey,
         sessionMessageCount,
         composerOverlayHeight,
-        lastUserMessageId,
         sessionIsWorking,
         revealGate,
         onActiveTurnChange: handleActiveTurnChange,
@@ -1554,9 +1531,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 directory={effectiveSessionDirectory}
                 scrollRef={scrollRef}
                 registerList={registerList}
-                anchorMessageId={anchorMessageId}
-                onAnchorReady={onAnchorReady}
-                onAnchorSizeChanged={onAnchorSizeChanged}
                 onIsAtEndChange={onIsAtEndChange}
                 onListMetricsChange={onListMetricsChange}
                 onTimelineDataChange={onTimelineDataChange}

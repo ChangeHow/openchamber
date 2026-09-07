@@ -20,7 +20,7 @@ import type { StreamPhase } from './message/types';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionPartsForMessages } from '@/sync/sync-context';
 import type { ReviewTransferDirection } from '@/lib/reviewFlow';
-import { resolveChatListAnchoredEndSpace, resolveTimelineIsAtEnd } from './lib/scroll/timelineScrollAnchoring';
+import { resolveTimelineIsAtEnd } from './lib/scroll/timelineScrollAnchoring';
 import {
     USER_SHELL_MARKER,
     isUserShellMarkerMessage,
@@ -43,8 +43,6 @@ const EMPTY_UNGROUPED_MESSAGE_IDS = new Set<string>();
 //   • `maintainVisibleContentPosition` preserves the read position when older
 //     history is prepended, replacing the manual anchor-hold and the mobile
 //     quiet-window prepend deferral.
-//   • `anchoredEndSpace` reserves the tail space that parks a just-sent
-//     message near the top of the viewport.
 const TIMELINE_ESTIMATED_ENTRY_SIZE = 320;
 
 // Anchor hold for an explicit viewport restore (session re-entry): row
@@ -54,9 +52,6 @@ const TIMELINE_ESTIMATED_ENTRY_SIZE = 320;
 const ANCHOR_HOLD_STABLE_FRAMES = 30;
 const ANCHOR_HOLD_MAX_FRAMES = 180;
 
-// Reserved tail space that parks an anchored row near the top of the viewport.
-// `onReady` fires once the list has measured the anchor, `onSizeChanged` when
-// the reserved size is recomputed.
 // Presentation-only props forwarded to the scroll container the list renders.
 // Deliberately narrow: the list owns scroll and layout callbacks on that
 // element, so only styling, focus and click-through are caller-controlled.
@@ -67,13 +62,6 @@ type TimelineScrollContainerProps = {
     onClick?: React.MouseEventHandler<HTMLDivElement>;
     'data-scrollbar'?: string;
     'data-scroll-shadow'?: string;
-};
-
-type TimelineAnchoredEndSpace = {
-    anchorIndex: number;
-    anchorOffset?: number;
-    onReady?: (info: { anchorIndex: number | undefined; anchorKey: string | undefined; size: number }) => void;
-    onSizeChanged?: (size: number) => void;
 };
 
 const useStableEvent = <TArgs extends unknown[], TResult>(handler: (...args: TArgs) => TResult) => {
@@ -324,11 +312,6 @@ interface MessageListProps {
     // True while a real gesture owns the scroll; releases the list's own
     // end pinning so the state machine, not the library heuristic, decides.
     endPinningReleased?: boolean;
-    // The anchored row is identified by message id; the index it maps to is a
-    // property of the row model, which only this component knows.
-    anchorMessageId?: string | null;
-    onAnchorReady?: (messageId: string, anchorIndex: number) => void;
-    onAnchorSizeChanged?: (messageId: string) => void;
     composerOverlayHeight?: number;
     onIsAtEndChange?: (isAtEnd: boolean) => void;
     onListMetricsChange?: (metrics: { readonly footerSize: number }) => void;
@@ -952,12 +935,6 @@ type TimelineListProps = {
     streamingTailKey: string | null;
     registerList: (list: LegendListRef | null) => void;
     endPinningReleased: boolean;
-    anchoredEndSpace?: {
-        anchorIndex: number;
-        anchorOffset?: number;
-        onReady?: (info: { anchorIndex: number | undefined; anchorKey: string | undefined; size: number }) => void;
-        onSizeChanged?: (size: number) => void;
-    };
     composerOverlayHeight: number;
     onIsAtEndChange: (isAtEnd: boolean) => void;
     onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
@@ -972,7 +949,6 @@ const TimelineList = React.memo(({
     entries,
     registerList,
     endPinningReleased,
-    anchoredEndSpace,
     composerOverlayHeight,
     onIsAtEndChange,
     onListMetricsChange,
@@ -1067,10 +1043,7 @@ const TimelineList = React.memo(({
                 // animations); recycling a container into a different row would
                 // carry that state across.
                 recycleItems={false}
-                {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
                 contentInsetEndAdjustment={composerOverlayHeight}
-                // While a turn is anchored, the reserved end space — not the
-                // live edge — defines where the viewport rests.
                 // Live only while the session streams: outside a stream the
                 // owning hook keeps a pinned reader on the end with same-frame
                 // writes, and the list's own correction runs a frame later
@@ -1078,7 +1051,7 @@ const TimelineList = React.memo(({
                 // re-wrap, a late measurement) — that is the visible bounce
                 // an idle reader saw on every panel toggle. Also off while the
                 // width resizes, where the hook holds the measured end itself.
-                maintainScrollAtEnd={anchoredEndSpace || !streamingAutoFollowEnabled || !rowContext.sessionIsWorking || isWidthResizing || endPinningReleased
+                maintainScrollAtEnd={!streamingAutoFollowEnabled || !rowContext.sessionIsWorking || isWidthResizing || endPinningReleased
                     ? false
                     // Animated: the block-step growth turns each correction
                     // into a glide and reveal + scroll read as one motion.
@@ -1187,9 +1160,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     directory,
     registerList,
     endPinningReleased = false,
-    anchorMessageId = null,
-    onAnchorReady,
-    onAnchorSizeChanged,
     composerOverlayHeight = 0,
     onIsAtEndChange,
     onListMetricsChange,
@@ -1802,27 +1772,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         };
     }, [findMessageElement, historyEntries.length, messageIndexMap, resolveScrollContainer, scrollHistoryIndexIntoView, scrollMessageElementIntoView, settleNavigationTarget, turnIndexMap, ref]);
 
-    const anchoredEndSpace = React.useMemo<TimelineAnchoredEndSpace | undefined>(() => {
-        const resolved = resolveChatListAnchoredEndSpace(
-            allEntries,
-            anchorMessageId,
-            (entry) => (entry.kind === 'turn' ? entry.turn.userMessage.info.id : entry.message.info.id),
-        );
-        if (!resolved || !anchorMessageId) {
-            return undefined;
-        }
-        return {
-            ...resolved,
-            onReady: (info) => {
-                if (info.anchorIndex === undefined) return;
-                onAnchorReady?.(anchorMessageId, info.anchorIndex);
-            },
-            onSizeChanged: () => {
-                onAnchorSizeChanged?.(anchorMessageId);
-            },
-        };
-    }, [allEntries, anchorMessageId, onAnchorReady, onAnchorSizeChanged]);
-
     const rowContext = React.useMemo(() => ({
         scrollToBottom: stableScrollToBottom,
         stickyUserHeader,
@@ -1868,7 +1817,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                 entries={allEntries}
                 streamingTailKey={trailingStreamingEntry?.key ?? null}
                 registerList={handleRegisterList}
-                anchoredEndSpace={anchoredEndSpace}
                 composerOverlayHeight={composerOverlayHeight}
                 onIsAtEndChange={stableIsAtEndChange}
                 onListMetricsChange={stableListMetricsChange}
