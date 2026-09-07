@@ -51,6 +51,7 @@ import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { CONTEXT_METADATA_KEY, draftFromContextPayload } from '@/lib/messages/contextParts';
 import { ComposerStatusBar } from './ComposerStatusBar';
 import { shouldSubmitEnter } from './composer/keyboardPolicy';
+import { getDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
 import { PendingChangesBar } from './PendingChangesBar';
 import { useChatColumnSession } from './chatColumnSession';
 import { useChatSurfaceMode } from './useChatSurfaceMode';
@@ -1873,40 +1874,17 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             return;
         }
 
-        if (openAutocomplete === 'command' && commandRef.current) {
-            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
-                e.preventDefault();
-                e.stopPropagation();
-                commandRef.current.handleKeyDown(e.key);
-                return;
-            }
-        }
-
-        if (openAutocomplete === 'skill' && skillRef.current) {
-            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
-                e.preventDefault();
-                e.stopPropagation();
-                skillRef.current.handleKeyDown(e.key);
-                return;
-            }
-        }
-
-        if (openAutocomplete === 'snippet' && snippetRef.current) {
-            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
-                e.preventDefault();
-                e.stopPropagation();
-                snippetRef.current.handleKeyDown(e.key);
-                return;
-            }
-        }
-
-        if (openAutocomplete === 'mention' && mentionRef.current) {
-            if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
-                e.preventDefault();
-                e.stopPropagation();
-                mentionRef.current.handleKeyDown(e.key);
-                return;
-            }
+        const autocomplete = openAutocomplete === 'command' ? commandRef.current
+            : openAutocomplete === 'skill' ? skillRef.current
+                : openAutocomplete === 'snippet' ? snippetRef.current
+                    : openAutocomplete === 'mention' ? mentionRef.current
+                        : null;
+        const autocompleteKey = getDropdownNavigationKey(e) ?? e.key;
+        if (autocomplete && (autocompleteKey === 'Enter' || autocompleteKey === 'ArrowUp' || autocompleteKey === 'ArrowDown' || autocompleteKey === 'Escape' || autocompleteKey === 'Tab')) {
+            e.preventDefault();
+            e.stopPropagation();
+            autocomplete.handleKeyDown(autocompleteKey);
+            return;
         }
 
         if (isDesktopExpanded && e.key === 'Escape') {

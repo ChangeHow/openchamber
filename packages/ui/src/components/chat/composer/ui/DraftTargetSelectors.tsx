@@ -163,6 +163,10 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
     const [projectFocusReturn, setProjectFocusReturn] = React.useState(false);
     const projectTriggerRef = React.useRef<HTMLButtonElement>(null);
     const worktreeTriggerRef = React.useRef<HTMLButtonElement>(null);
+    // Controlled Select closes can omit finalFocus's interaction type.
+    const keyboardCloseRef = React.useRef(false);
+    const getComposerInput = () => projectTriggerRef.current?.closest('form')?.querySelector<HTMLElement>('[data-chat-input="true"] .cm-content');
+    const getFinalFocus = () => keyboardCloseRef.current ? getComposerInput() : true;
     const projectSearchRef = React.useRef<HTMLInputElement>(null);
     // Preserve Select's dialog portal and main-area containment.
     const [projectPortalContainer, setProjectPortalContainer] = React.useState<HTMLElement | null>(null);
@@ -190,6 +194,7 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
         if (openPicker === null || !shouldDismissDropdown(event)) return;
         event.preventDefault();
         event.stopPropagation();
+        keyboardCloseRef.current = true;
         setOpenPicker(null);
     };
 
@@ -279,10 +284,10 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
                     setOpenPicker(null);
                 }}
                 onOpenChangeComplete={(open) => {
-                    // Return focus after Base UI finishes closing so the
-                    // trigger itself, not document body, keeps keyboard flow.
+                    // Return focus after Base UI finishes closing so typing
+                    // continues in this form's composer, including reselection.
                     if (!open && projectFocusReturn) {
-                        projectTriggerRef.current?.focus();
+                        (getComposerInput() ?? projectTriggerRef.current)?.focus();
                         setProjectFocusReturn(false);
                     }
                     // Focus the search once the popup mounts; the opening
@@ -403,7 +408,10 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
                 <Select
                     value={selectedDirectory ?? branchItems[0]?.value ?? normalizePath(selectedProject.path) ?? ''}
                     open={openPicker === 'worktree'}
-                    onOpenChange={(open) => setOpenPicker(open ? 'worktree' : null)}
+                    onOpenChange={(open, details) => {
+                        keyboardCloseRef.current = !open && details.event.type === 'keydown';
+                        setOpenPicker(open ? 'worktree' : null);
+                    }}
                     onValueChange={handleDirectoryChange}
                     disableGlobalShortcuts
                 >
@@ -433,7 +441,7 @@ export function DraftTargetSelectors(props: DraftTargetProps) {
                             </TooltipContent>
                         ) : null}
                     </Tooltip>
-                    <SelectContent side="top" collisionAvoidance={{ side: 'none' }} constrainToMain className="w-max min-w-48" onKeyDown={handlePickerKeyDown}>
+                    <SelectContent side="top" collisionAvoidance={{ side: 'none' }} constrainToMain className="w-max min-w-48" onKeyDown={handlePickerKeyDown} finalFocus={getFinalFocus}>
                         {projectRootBranchOption ? (
                             <SelectGroup>
                                 <SelectLabel>{t('chat.chatInput.projectRoot')}</SelectLabel>

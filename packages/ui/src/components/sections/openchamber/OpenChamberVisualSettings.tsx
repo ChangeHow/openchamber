@@ -405,7 +405,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setEnterToSend = useUIStore(state => state.setEnterToSend);
     const enterToSendConfigured = useUIStore(state => state.enterToSendConfigured);
     const setEnterToSendConfigured = useUIStore(state => state.setEnterToSendConfigured);
-    const isExpandedInput = useUIStore(state => state.isExpandedInput);
+    const enterSendSelected = enterToSendConfigured ? enterToSend : !isMobile;
     const showToolFileIcons = useUIStore(state => state.showToolFileIcons);
     const setShowToolFileIcons = useUIStore(state => state.setShowToolFileIcons);
     const showTurnChangedFiles = useUIStore(state => state.showTurnChangedFiles);
@@ -2097,8 +2097,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 <SettingsSection
                                     title={t('settings.openchamber.visual.section.composer')}
                                     settingsItem="chat.composer"
-                                    contentClassName={SETTINGS_OPTION_STACK_CLASS}
+                                    contentClassName="space-y-6"
                                 >
+                                {(shouldShow('persistDraft') || (!isMobile && shouldShow('inputSpellcheck'))) && (
+                                <div className={SETTINGS_OPTION_STACK_CLASS}>
                                 {shouldShow('persistDraft') && (
                                     <SettingsCheckboxRow
                                         checked={persistChatDraft}
@@ -2118,11 +2120,13 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         settingsItem="chat.spellcheck"
                                     />
                                 )}
+                                </div>
+                                )}
 
                                 {shouldShow('largeTextPaste') && (
                                     <SettingsControlGroup
                                         title={t('settings.openchamber.visual.field.largeTextPaste')}
-                                        info={t('settings.openchamber.visual.field.largeTextPasteHint')}
+                                        description={t('settings.openchamber.visual.field.largeTextPasteHint')}
                                         settingsItem="chat.large-text-paste"
                                     >
                                         <SettingsRadioGroup aria-label={t('settings.openchamber.visual.field.largeTextPasteAria')}>
@@ -2139,14 +2143,26 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                      </SettingsControlGroup>
                                 )}
                                 {shouldShow('enterToSend') && (
-                                    <SettingsCheckboxRow
-                                        checked={enterToSendConfigured ? enterToSend : !isMobile && !isExpandedInput}
-                                        onChange={handleEnterToSendChange}
-                                        label={t('settings.openchamber.visual.field.enterToSend')}
-                                        info={t('settings.openchamber.visual.field.enterToSendHint')}
-                                        ariaLabel={t('settings.openchamber.visual.field.enterToSend')}
+                                    <SettingsControlGroup
+                                        title={t('settings.openchamber.visual.field.enterToSend')}
+                                        description={t('settings.openchamber.visual.field.enterToSendHint')}
                                         settingsItem="chat.enter-to-send"
-                                    />
+                                    >
+                                        <SettingsRadioGroup aria-label={t('settings.openchamber.visual.field.enterToSend')}>
+                                            <SettingsRadioOption
+                                                selected={enterSendSelected}
+                                                onSelect={() => handleEnterToSendChange(true)}
+                                                label={t('settings.openchamber.visual.option.enterToSend.enter.label')}
+                                                ariaLabel={t('settings.openchamber.visual.option.enterToSend.enter.label')}
+                                            />
+                                            <SettingsRadioOption
+                                                selected={!enterSendSelected}
+                                                onSelect={() => handleEnterToSendChange(false)}
+                                                label={t('settings.openchamber.visual.option.enterToSend.modifier.label')}
+                                                ariaLabel={t('settings.openchamber.visual.option.enterToSend.modifier.label')}
+                                            />
+                                        </SettingsRadioGroup>
+                                    </SettingsControlGroup>
                                 )}
                                 </SettingsSection>
                                 )}
