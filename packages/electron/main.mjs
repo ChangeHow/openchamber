@@ -579,6 +579,30 @@ const readSettingsRoot = () => {
   return root && typeof root === 'object' && !Array.isArray(root) ? root : {};
 };
 
+// The user's profile (theme mode among it) lives in preferences.json beside
+// settings.json since the settings split; each entry is { value, updatedAt }.
+// Installs that predate the split still carry those keys in settings.json, so
+// readers merge both, preferences winning.
+const readPreferencesValues = () => {
+  const root = readJsonFile(path.join(path.dirname(settingsFilePath()), 'preferences.json'));
+  const fields = root && typeof root === 'object' && root.version === 1 && root.fields && typeof root.fields === 'object'
+    ? root.fields
+    : {};
+  // Per-surface keys (theme mode among them) are resolved for the desktop
+  // shell: its own value first, the base value otherwise.
+  const values = {};
+  for (const [key, entry] of Object.entries(fields)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const own = entry.surfaces && typeof entry.surfaces === 'object' ? entry.surfaces.desktop : undefined;
+    if (own && typeof own === 'object' && 'value' in own) {
+      values[key] = own.value;
+    } else if ('value' in entry) {
+      values[key] = entry.value;
+    }
+  }
+  return values;
+};
+
 // Serializes read-modify-write of the settings file within this process.
 // Multiple call sites (spawnLocalServer, writeDesktopHostsConfig, theme
 // preference saves, ssh manager imports, etc.) would otherwise have their
@@ -1784,12 +1808,24 @@ const computeBootOutcome = ({ envTargetUrl, probe, config, localAvailable }) => 
   return { target: 'remote', status, hostId: host.id, url: host.apiUrl || host.url, ...availability };
 };
 
+const readSplashColor = (settings, key, fallback) => {
+  // The renderer hands the colours over IPC (desktop_set_window_theme) and
+  // main stores them under `desktopSplashColors`; the flat `splash*` keys are
+  // what builds before the settings split wrote and are read as a fallback.
+  const owned = settings.desktopSplashColors && typeof settings.desktopSplashColors === 'object'
+    ? settings.desktopSplashColors[key]
+    : undefined;
+  const legacy = settings[`splash${key.charAt(0).toUpperCase()}${key.slice(1)}`];
+  const value = typeof owned === 'string' ? owned : legacy;
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+};
+
 const buildStartupSplashHtml = () => {
   const settings = readSettingsRoot();
-  const splashBgLight = typeof settings.splashBgLight === 'string' ? settings.splashBgLight.trim() : '#f5f5f4';
-  const splashFgLight = typeof settings.splashFgLight === 'string' ? settings.splashFgLight.trim() : '#1c1917';
-  const splashBgDark = typeof settings.splashBgDark === 'string' ? settings.splashBgDark.trim() : '#0c0a09';
-  const splashFgDark = typeof settings.splashFgDark === 'string' ? settings.splashFgDark.trim() : '#fafaf9';
+  const splashBgLight = readSplashColor(settings, 'bgLight', '#f5f5f4');
+  const splashFgLight = readSplashColor(settings, 'fgLight', '#1c1917');
+  const splashBgDark = readSplashColor(settings, 'bgDark', '#0c0a09');
+  const splashFgDark = readSplashColor(settings, 'fgDark', '#fafaf9');
 
   return `<!doctype html>
   <html>
@@ -2408,7 +2444,7 @@ const nextWindowLabel = () => {
 };
 
 const readThemeSource = () => {
-  const settings = readSettingsRoot();
+  const settings = { ...readSettingsRoot(), ...readPreferencesValues() };
   // themeMode is the user's intent; themeVariant is only the resolved
   // concrete appearance at persist time. When mode === 'system', we must
   // follow the OS even if variant was saved as a specific value.
@@ -4447,6 +4483,21 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     case 'desktop_set_window_theme': {
       const mode = typeof args.themeMode === 'string' ? args.themeMode : '';
       const variant = typeof args.themeVariant === 'string' ? args.themeVariant : '';
+      const splash = args.splash && typeof args.splash === 'object' ? args.splash : null;
+      if (splash) {
+        const colors = {};
+        for (const key of ['bgLight', 'fgLight', 'bgDark', 'fgDark']) {
+          if (typeof splash[key] === 'string' && splash[key].trim()) colors[key] = splash[key].trim();
+        }
+        if (Object.keys(colors).length === 4) {
+          const current = readSettingsRoot().desktopSplashColors;
+          const unchanged = current && typeof current === 'object'
+            && ['bgLight', 'fgLight', 'bgDark', 'fgDark'].every((key) => current[key] === colors[key]);
+          if (!unchanged) {
+            void mutateSettingsRoot((root) => ({ ...root, desktopSplashColors: colors }));
+          }
+        }
+      }
       // Priority order: themeMode expresses the user's intent (including
       // "follow OS"). Variant is just the resolved variant at send time;
       // when mode === 'system' with variant === 'dark' (because OS is

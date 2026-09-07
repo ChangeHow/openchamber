@@ -629,6 +629,26 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['worktree', 'setup commands', 'bootstrap', 'wait'],
   },
   {
+    id: 'projects.worktree.setup.replace',
+    page: 'projects',
+    titleKey: 'settings.projects.shared.replaceMode',
+    keywords: ['worktree', 'setup commands', 'shared', 'team', 'only mine'],
+  },
+  {
+    id: 'projects.shared',
+    page: 'projects',
+    titleKey: 'settings.projects.shared.title',
+    descriptionKey: 'settings.projects.shared.description',
+    keywords: ['shared', 'team', 'repository', '.openchamber', 'project.json', 'trust'],
+  },
+  {
+    id: 'projects.shared.plansDir',
+    page: 'projects',
+    titleKey: 'settings.projects.shared.plansDir',
+    descriptionKey: 'settings.projects.shared.plansDirInfo',
+    keywords: ['plans', 'folder', 'shared', 'team', 'docs'],
+  },
+  {
     id: 'remote-instances.client-auth',
     page: 'remote-instances',
     titleKey: 'settings.remoteInstances.clientAuth.title',

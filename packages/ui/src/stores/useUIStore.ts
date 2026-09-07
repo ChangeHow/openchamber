@@ -3068,6 +3068,7 @@ export const useUIStore = create<UIStore>()(
           weekStartPreference: state.weekStartPreference,
           desktopWindowControlsPosition: state.desktopWindowControlsPosition,
           desktopWindowControlsStyle: state.desktopWindowControlsStyle,
+          inputBarOffset: state.inputBarOffset,
           mermaidRenderingMode: state.mermaidRenderingMode,
           userMessageRenderingMode: state.userMessageRenderingMode,
           collapsibleUserMessages: state.collapsibleUserMessages,

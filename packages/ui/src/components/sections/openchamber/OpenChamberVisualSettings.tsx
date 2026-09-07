@@ -1,5 +1,4 @@
 import React from 'react';
-import { runtimeFetch } from '@/lib/runtime-fetch';
 
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import type { ThemeMode } from '@/types/theme';
@@ -27,7 +26,7 @@ import {
 } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { usePwaDetection } from '@/hooks/usePwaDetection';
-import { updateDesktopSettings } from '@/lib/persistence';
+import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import { CODE_FONT_OPTIONS, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTIONS, type MonoFontOption, type UiFontOption } from '@/lib/fontOptions';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -850,24 +849,19 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
         const loadPwaInstallName = async () => {
             try {
-                const response = await runtimeFetch('/api/config/settings', {
-                    method: 'GET',
-                    headers: { Accept: 'application/json' },
-                    cache: 'no-store',
-                });
+                const settings = await loadDesktopSettings();
 
-                if (!response.ok) {
+                if (!settings) {
                     if (!cancelled) {
                         setPwaInstallName(DEFAULT_PWA_INSTALL_NAME);
                     }
                     return;
                 }
 
-                const settings = await response.json().catch(() => ({}));
-                const raw = typeof settings?.pwaAppName === 'string' ? settings.pwaAppName : '';
+                const raw = settings.pwaAppName ?? '';
                 const normalized = raw.trim().replace(/\s+/g, ' ').slice(0, 64);
-                const orientation = normalizePwaOrientation(settings?.pwaOrientation);
-                const nextMobileKeyboardMode = normalizeMobileKeyboardMode(settings?.mobileKeyboardMode);
+                const orientation = normalizePwaOrientation(settings.pwaOrientation);
+                const nextMobileKeyboardMode = normalizeMobileKeyboardMode(settings.mobileKeyboardMode);
 
                 if (!cancelled) {
                     if (showPwaInstallNameSetting) {

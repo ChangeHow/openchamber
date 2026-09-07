@@ -2087,14 +2087,15 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         throw new Error("Project is not registered in OpenChamber")
       }
 
-      const [branchNameModule, configModule, createModule] = await Promise.all([
+      const [branchNameModule, configModule, trustModule, createModule] = await Promise.all([
         import("@/lib/git/branchNameGenerator"),
         import("@/lib/openchamberConfig"),
+        import("@/lib/sharedTrustConfirmation"),
         import("@/lib/worktrees/worktreeCreate"),
       ])
       const branchName = branchNameModule.generateBranchName()
       createdWorktreeProject = { id: project.id, path: project.path }
-      const setupCommands = await configModule.getWorktreeSetupCommands(createdWorktreeProject)
+      const setupCommands = await trustModule.resolveWorktreeSetupCommands(createdWorktreeProject)
       createdWorktree = await createModule.createWorktreeWithDefaults(createdWorktreeProject, {
         preferredName: branchName,
         mode: "new",
