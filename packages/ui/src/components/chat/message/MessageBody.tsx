@@ -2162,7 +2162,7 @@ const AssistantMessageBody = React.memo(({
              ) : null}
               <div>
                  <div
-                     className="message-content-text leading-relaxed overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
+                     className="message-content-text leading-relaxed overflow-hidden text-foreground/80 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
                  >
                     {renderedParts}
                     {showErrorMessage && (
