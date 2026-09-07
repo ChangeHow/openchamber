@@ -152,7 +152,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     const handleBoxScroll = React.useCallback((event: React.UIEvent<HTMLElement>) => {
         const node = event.currentTarget;
         const distanceToEnd = node.scrollHeight - node.clientHeight - node.scrollTop;
-        if (distanceToEnd <= 2) followBoxEndRef.current = true;
+        followBoxEndRef.current = distanceToEnd <= 2;
     }, []);
 
     React.useEffect(() => {
