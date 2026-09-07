@@ -190,6 +190,14 @@ Reachable filesystem routes: `api:fs:read` (attachments), `api:fs:search`
 Maintenance: reviews, changelog entries, and parity claims consult this map;
 whoever mounts or unmounts a surface updates it in the same change.
 
+## Network connections
+
+Extension activation applies `networkDefaults.ts` before registering handlers.
+It gives Node connection attempts 5 seconds, matching the web runtime, so quota
+requests to distant providers can connect. This is an extension-host process
+default, including other Node connections in that host. Address-family selection
+stays unchanged; runtimes without the setter retain their existing behavior.
+
 ## Global OpenCode paths
 
 `opencodeConfigPaths.ts` owns the global config directory for config CRUD,

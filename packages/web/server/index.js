@@ -118,6 +118,10 @@ import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import webPush from 'web-push';
+import { applyConnectAttemptTimeout } from './lib/network-defaults.js';
+
+// Background CLI launches enter here in a fresh process, without CLI defaults.
+applyConnectAttemptTimeout();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

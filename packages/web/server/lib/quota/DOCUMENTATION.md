@@ -3,6 +3,11 @@
 ## Purpose
 This module fetches quota and usage signals for supported providers in the web server runtime.
 
+Node server entrypoints apply `../network-defaults.js` before serving requests,
+including the daemon launched directly through `server/index.js`. Connection
+attempts get 5 seconds without changing address-family selection. The VS Code
+extension applies the same policy in its own process at activation.
+
 ## Entrypoints and structure
 - `packages/web/server/lib/quota/index.js`: public entrypoint imported by `packages/web/server/index.js`.
 - `packages/web/server/lib/quota/routes.js`: Express route registration for quota endpoints.
