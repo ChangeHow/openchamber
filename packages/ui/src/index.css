@@ -1134,6 +1134,7 @@ html:not(.dark) .chat-scroll {
 .markdown-content h5,
 .markdown-content h6 {
   margin: 1.25rem 0 0.5rem;
+  color: color-mix(in srgb, var(--foreground) 95%, transparent);
   font-weight: 600;
   line-height: 1.3;
 }
