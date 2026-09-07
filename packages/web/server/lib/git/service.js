@@ -357,9 +357,9 @@ const createGit = async (directory, { allowUnsafeSshCommand = false, allowUnsafe
   const spawnOptions = { windowsHide: true };
   const binary = getGitBinary();
   const hasCustomBinary = typeof binary === 'string' && binary.trim() && binary !== 'git' && binary !== 'git.exe';
-  const unsafe = hasCustomBinary || allowUnsafeSshCommand
+  const unsafe = hasCustomBinary || allowUnsafeSshCommand || allowUnsafeCredentialHelper
     ? {
-      ...(hasCustomBinary && { allowUnsafeCustomBinary: true }),
+        ...(hasCustomBinary && { allowUnsafeCustomBinary: true }),
         ...(allowUnsafeSshCommand && { allowUnsafeSshCommand: true }),
         ...(allowUnsafeCredentialHelper && { allowUnsafeCredentialHelper: true }),
       }
