@@ -32,6 +32,8 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
     desktopUpdater,
   } = dependencies;
 
+  let desktopRestartError = null;
+
   app.get('/api/openchamber/update-check', async (req, res) => {
     try {
       const parseString = (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined);
@@ -61,6 +63,12 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
       };
       let updateInfo;
       if (process.env.OPENCHAMBER_RUNTIME === 'desktop' && updateRequest.appType === 'web') {
+        if (desktopRestartError && req.query.updateStatus === 'true') {
+          return res.status(503).json({
+            code: 'DESKTOP_UPDATE_RESTART_FAILED',
+            error: desktopRestartError,
+          });
+        }
         if (typeof desktopUpdater?.check !== 'function') {
           return res.status(503).json({
             available: false,
@@ -97,6 +105,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
           });
         }
 
+        desktopRestartError = null;
         const updateInfo = await desktopUpdater.install();
         if (!updateInfo?.available) {
           return res.status(400).json({ error: 'No update available' });
@@ -115,7 +124,10 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
         setImmediate(() => {
           Promise.resolve()
             .then(() => desktopUpdater.restart())
-            .catch((error) => console.error('Failed to restart after desktop update:', error));
+            .catch((error) => {
+              desktopRestartError = error instanceof Error ? error.message : 'Failed to restart after desktop update';
+              console.error('Failed to restart after desktop update:', error);
+            });
         });
         return;
       }

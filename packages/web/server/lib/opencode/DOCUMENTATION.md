@@ -368,6 +368,16 @@ before starting managed OpenCode. The managed custom tool therefore receives
 an authoritative loopback callback URL even when OpenChamber binds port `0`.
 
 ## Public exports (openchamber-routes.js)
+Browser completion checks use `appType=web&updateStatus=true` to stay on the
+Desktop Host's native updater. A rejected native restart is retained in the
+server process and returned to these polls as `DESKTOP_UPDATE_RESTART_FAILED`;
+ordinary availability checks remain usable so a browser reload can offer a
+retry. Starting another installation clears the previous restart error.
+The shared UI's `lib/web-update.ts` parses install/check responses and waits
+for the installed native target version, rather than treating absence of a
+newer release as installation success. Poll requests have individual deadlines
+within a ten-minute overall deadline.
+
 - `registerOpenChamberRoutes(app, dependencies)`: registers OpenChamber endpoints:
   - `GET /api/openchamber/update-check`
   - `POST /api/openchamber/update-install`
