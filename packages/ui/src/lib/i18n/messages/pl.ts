@@ -3519,6 +3519,10 @@ export const dict: Record<I18nKey, string> = {
   'chat.compaction.hideSummary': 'Ukryj podsumowanie',
   'chat.revertPopover.staged': 'Wiadomości do usunięcia: {count}',
   'chat.revertPopover.clear': 'Zachowaj wiadomości',
+  'chat.revertPopover.keepShort': 'Zachowaj',
   'chat.revertPopover.commit': 'Usuń na stałe',
+  'chat.revertPopover.choiceTitle': 'Cofnięte wiadomości',
+  'chat.revertPopover.clearDescription': 'Przywróć te wiadomości do rozmowy, aby pozostały w kontekście.',
+  'chat.revertPopover.commitDescription': 'Trwale usuń te wiadomości z rozmowy i jej kontekstu.',
   'chat.workStatus.mcp.needsAuthHint': 'Zaloguj się do tego serwera MCP w Ustawienia → MCP.',
 } as const;

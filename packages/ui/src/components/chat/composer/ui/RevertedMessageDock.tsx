@@ -14,6 +14,7 @@ import type { Part } from '@/lib/opencode/model';
 
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -47,12 +48,22 @@ type RevertedMessageDockProps = {
     directory?: string;
 };
 
+const REVERT_ACTIONS_EXPLAINED_KEY = 'openchamber.revertActionsExplained';
+
 export const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.memo(({ sessionId, directory }) => {
     const { t } = useI18n();
     const forkFromMessage = useSessionUIStore((s) => s.forkFromMessage);
     const [settling, setSettling] = React.useState<'commit' | 'clear' | null>(null);
     const [forkingId, setForkingId] = React.useState<string | null>(null);
     const [collapsed, setCollapsed] = React.useState(true);
+    const [hasSeenExplanation, setHasSeenExplanation] = React.useState(() => {
+        try {
+            return localStorage.getItem(REVERT_ACTIONS_EXPLAINED_KEY) === '1';
+        } catch {
+            return false;
+        }
+    });
+    const [pendingAction, setPendingAction] = React.useState<{ action: 'clear' | 'commit'; sessionId: string } | null>(null);
     const revertedStateRef = React.useRef<RevertedMessageDockState>(EMPTY_REVERTED_MESSAGE_DOCK_STATE);
     const revertedState = useDirectorySync(
         React.useCallback((state) => {
@@ -97,6 +108,31 @@ export const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.mem
         }
     }, [sessionId, settling]);
 
+    const runAction = (action: 'clear' | 'commit') => {
+        if (!sessionId || settling || forkingId) return;
+        if (!hasSeenExplanation) {
+            setPendingAction({ action, sessionId });
+            return;
+        }
+        void (action === 'clear' ? handleClear() : handleCommit());
+    };
+
+    const confirmAction = () => {
+        if (!pendingAction || sessionId !== pendingAction.sessionId || settling || forkingId) {
+            setPendingAction(null);
+            return;
+        }
+        const action = pendingAction.action;
+        setPendingAction(null);
+        setHasSeenExplanation(true);
+        try {
+            localStorage.setItem(REVERT_ACTIONS_EXPLAINED_KEY, '1');
+        } catch {
+            // The explanation still applies to this page if storage is unavailable.
+        }
+        void (action === 'clear' ? handleClear() : handleCommit());
+    };
+
     const handleFork = React.useCallback(async (messageId: string) => {
         if (!sessionId || forkingId || settling) return;
         setForkingId(messageId);
@@ -119,44 +155,45 @@ export const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.mem
                         onClick={() => setCollapsed((value) => !value)}
                         aria-expanded={!collapsed}
                     >
-                    <span className="typography-ui-label font-medium text-foreground flex-shrink-0">
+                    <span className="typography-ui-label font-medium text-foreground truncate">
                         {t('chat.revertPopover.staged', { count: items.length })}
                     </span>
                         <Icon
                             name="arrow-down-s"
-                            className={cn("ml-auto h-4 w-4 text-muted-foreground transition-transform", !collapsed && "rotate-180")}
+                            className={cn("ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform", !collapsed && "rotate-180")}
                             aria-hidden="true"
                         />
                     </button>
-                    {/* The staged revert settles one way or the other: commit
-                        drops the listed messages, clear puts the session back. */}
                     <Button
                         type="button"
                         variant="secondary"
-                        size="xs"
+                        size="icon"
+                        className="w-auto px-3"
                         disabled={Boolean(settling || forkingId)}
-                        onClick={() => { void handleClear(); }}
+                        onClick={() => runAction('clear')}
+                        aria-label={t('chat.revertPopover.clear')}
+                        title={t('chat.revertPopover.clear')}
                     >
                         {settling === 'clear' ? (
-                            <Icon name="loader-4" className="h-3 w-3 animate-spin" aria-hidden="true" />
+                            <Icon name="loader-4" className="size-4 animate-spin" aria-hidden="true" />
                         ) : (
-                            <Icon name="arrow-go-back" className="h-3 w-3" aria-hidden="true" />
+                            t('chat.revertPopover.keepShort')
                         )}
-                        {t('chat.revertPopover.clear')}
                     </Button>
                     <Button
                         type="button"
                         variant="destructive"
-                        size="xs"
+                        size="icon"
                         disabled={Boolean(settling || forkingId)}
-                        onClick={() => { void handleCommit(); }}
+                        onClick={() => runAction('commit')}
+                        aria-label={t('chat.revertPopover.commit')}
+                        title={t('chat.revertPopover.commit')}
                     >
                         {settling === 'commit' ? (
-                            <Icon name="loader-4" className="h-3 w-3 animate-spin" aria-hidden="true" />
+                            <Icon name="loader-4" className="size-4 animate-spin" aria-hidden="true" />
                         ) : (
-                            <Icon name="check" className="h-3 w-3" aria-hidden="true" />
+                            <Icon name="close" className="size-4" aria-hidden="true" />
                         )}
-                        {t('chat.revertPopover.commit')}
                     </Button>
                 </div>
                 {!collapsed && (
@@ -185,6 +222,29 @@ export const RevertedMessageDock: React.FC<RevertedMessageDockProps> = React.mem
                     </div>
                 )}
             </div>
+            <Dialog open={Boolean(pendingAction)} onOpenChange={(open) => { if (!open) setPendingAction(null); }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{t('chat.revertPopover.choiceTitle')}</DialogTitle>
+                        <DialogDescription className="space-y-3 text-left">
+                            <span className="block">
+                                <span className="block font-medium text-foreground">{t('chat.revertPopover.clear')}</span>
+                                {t('chat.revertPopover.clearDescription')}
+                            </span>
+                            <span className="block">
+                                <span className="block font-medium text-foreground">{t('chat.revertPopover.commit')}</span>
+                                {t('chat.revertPopover.commitDescription')}
+                            </span>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setPendingAction(null)}>{t('dialog.common.actions.close')}</Button>
+                        <Button variant={pendingAction?.action === 'commit' ? 'destructive' : 'default'} onClick={confirmAction}>
+                            {t(pendingAction?.action === 'commit' ? 'chat.revertPopover.commit' : 'chat.revertPopover.clear')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 });

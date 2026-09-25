@@ -3512,6 +3512,10 @@ export const dict = {
   'chat.compaction.hideSummary': 'Zusammenfassung ausblenden',
   'chat.revertPopover.staged': '{count} Nachrichten zum Entfernen vorgemerkt',
   'chat.revertPopover.clear': 'Nachrichten behalten',
+  'chat.revertPopover.keepShort': 'Behalten',
   'chat.revertPopover.commit': 'Endgültig entfernen',
+  'chat.revertPopover.choiceTitle': 'Zurückgesetzte Nachrichten',
+  'chat.revertPopover.clearDescription': 'Diese Nachrichten in die Unterhaltung zurückholen, damit sie im Kontext bleiben.',
+  'chat.revertPopover.commitDescription': 'Diese Nachrichten dauerhaft aus der Unterhaltung und ihrem Kontext entfernen.',
   'chat.workStatus.mcp.needsAuthHint': 'Melden Sie sich bei diesem MCP-Server unter Einstellungen → MCP an.',
 };

@@ -3514,6 +3514,10 @@ export const dict: Record<I18nKey, string> = {
   'chat.compaction.hideSummary': '要約を隠す',
   'chat.revertPopover.staged': '{count}件のメッセージが削除待ちです',
   'chat.revertPopover.clear': 'メッセージを残す',
+  'chat.revertPopover.keepShort': '残す',
   'chat.revertPopover.commit': '完全に削除',
+  'chat.revertPopover.choiceTitle': '取り消したメッセージ',
+  'chat.revertPopover.clearDescription': 'これらのメッセージを会話に戻し、コンテキストに残します。',
+  'chat.revertPopover.commitDescription': 'これらのメッセージを会話とコンテキストから完全に削除します。',
   'chat.workStatus.mcp.needsAuthHint': '設定 → MCP からこの MCP サーバーにサインインしてください。',
 };

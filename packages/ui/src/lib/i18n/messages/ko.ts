@@ -3514,6 +3514,10 @@ export const dict: Record<I18nKey, string> = {
   'chat.compaction.hideSummary': '요약 숨기기',
   'chat.revertPopover.staged': '삭제 대기 중인 메시지 {count}개',
   'chat.revertPopover.clear': '메시지 유지',
+  'chat.revertPopover.keepShort': '유지',
   'chat.revertPopover.commit': '영구 삭제',
+  'chat.revertPopover.choiceTitle': '되돌린 메시지',
+  'chat.revertPopover.clearDescription': '이 메시지를 대화에 복원하여 맥락에 계속 남깁니다.',
+  'chat.revertPopover.commitDescription': '이 메시지를 대화와 맥락에서 영구적으로 제거합니다.',
   'chat.workStatus.mcp.needsAuthHint': '설정 → MCP에서 이 MCP 서버에 로그인하세요.',
 };

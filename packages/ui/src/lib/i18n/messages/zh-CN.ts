@@ -3515,6 +3515,10 @@ export const dict: Record<I18nKey, string> = {
   'chat.compaction.hideSummary': '隐藏摘要',
   'chat.revertPopover.staged': '{count} 条消息待删除',
   'chat.revertPopover.clear': '保留消息',
+  'chat.revertPopover.keepShort': '保留',
   'chat.revertPopover.commit': '永久删除',
+  'chat.revertPopover.choiceTitle': '已撤回的消息',
+  'chat.revertPopover.clearDescription': '将这些消息恢复到对话中，使其继续保留在上下文里。',
+  'chat.revertPopover.commitDescription': '从对话及其上下文中永久移除这些消息。',
   'chat.workStatus.mcp.needsAuthHint': '请在“设置 → MCP”中登录此 MCP 服务器。',
 };

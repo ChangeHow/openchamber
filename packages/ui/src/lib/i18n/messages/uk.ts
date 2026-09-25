@@ -3515,6 +3515,10 @@ export const dict: Record<I18nKey, string> = {
   'chat.compaction.hideSummary': 'Сховати підсумок',
   'chat.revertPopover.staged': 'Повідомлень до видалення: {count}',
   'chat.revertPopover.clear': 'Залишити повідомлення',
+  'chat.revertPopover.keepShort': 'Залишити',
   'chat.revertPopover.commit': 'Видалити назавжди',
+  'chat.revertPopover.choiceTitle': 'Відкочені повідомлення',
+  'chat.revertPopover.clearDescription': 'Відновити ці повідомлення в розмові, щоб вони залишалися в контексті.',
+  'chat.revertPopover.commitDescription': 'Назавжди вилучити ці повідомлення з розмови та її контексту.',
   'chat.workStatus.mcp.needsAuthHint': 'Увійдіть до цього MCP-сервера в Налаштування → MCP.',
 };

@@ -7,6 +7,12 @@ everything between typing and sending.
 own state and wires these modules together; it should not grow logic that
 belongs to one of them.
 
+`ui/RevertedMessageDock.tsx` shows staged messages above the composer. Its
+short Keep action restores them to the conversation; its remove icon permanently
+removes them. The first action opens a dialog explaining both choices; confirming one
+stores a device-local acknowledgement so later actions run directly. Closing
+the dialog leaves the staged revert unchanged.
+
 `ChatContainer.tsx` keeps one `ChatInput` mounted while a new-session draft
 becomes its first session. Draft-only UI first fades for 120ms while the editor
 stays in place. The parent then moves the editor to its final session position

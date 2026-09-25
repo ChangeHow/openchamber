@@ -3512,6 +3512,10 @@ export const dict = {
   'chat.compaction.hideSummary': 'Özeti gizle',
   'chat.revertPopover.staged': '{count} mesaj kaldırılmak üzere işaretlendi',
   'chat.revertPopover.clear': 'Mesajları koru',
+  'chat.revertPopover.keepShort': 'Koru',
   'chat.revertPopover.commit': 'Kalıcı olarak kaldır',
+  'chat.revertPopover.choiceTitle': 'Geri alınan mesajlar',
+  'chat.revertPopover.clearDescription': 'Bu mesajları konuşmaya geri yükleyerek bağlamda tutun.',
+  'chat.revertPopover.commitDescription': 'Bu mesajları konuşmadan ve bağlamından kalıcı olarak kaldırın.',
   'chat.workStatus.mcp.needsAuthHint': 'Bu MCP sunucusuna Ayarlar → MCP üzerinden giriş yapın.',
 };

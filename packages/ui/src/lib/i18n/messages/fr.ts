@@ -3512,6 +3512,10 @@ export const dict = {
   'chat.compaction.hideSummary': 'Masquer le résumé',
   'chat.revertPopover.staged': '{count} messages prêts à être supprimés',
   'chat.revertPopover.clear': 'Conserver les messages',
+  'chat.revertPopover.keepShort': 'Conserver',
   'chat.revertPopover.commit': 'Supprimer définitivement',
+  'chat.revertPopover.choiceTitle': 'Messages annulés',
+  'chat.revertPopover.clearDescription': 'Rétablir ces messages dans la conversation pour les conserver dans le contexte.',
+  'chat.revertPopover.commitDescription': 'Supprimer définitivement ces messages de la conversation et de son contexte.',
   'chat.workStatus.mcp.needsAuthHint': 'Connectez-vous à ce serveur MCP depuis Paramètres → MCP.',
 } as const;
