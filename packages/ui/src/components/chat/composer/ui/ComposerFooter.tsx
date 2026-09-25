@@ -139,7 +139,7 @@ export function ComposerFooter(props: ComposerFooterProps) {
         >
             {isMobile ? (
                 <>
-                    <div className="flex w-full items-center justify-between gap-x-1.5">
+                    <div className={cn('flex w-full justify-between gap-x-1.5', canAbort && hasContent ? 'items-end' : 'items-center')}>
                         <div className="composer-mobile-actions flex items-center gap-x-2 pl-1">
                             <ComposerAttachmentControls
                                 isVSCode={isVSCode}
@@ -172,8 +172,8 @@ export function ComposerFooter(props: ComposerFooterProps) {
                             /> : null}
                             {!isBtw ? <SessionGoalObjectiveCounter length={messageLength} /> : null}
                         </div>
-                        <div className="flex items-center min-w-0 gap-x-1 justify-end">
-                            <div className="flex items-center gap-x-1 flex-shrink-0">
+                        <div className={cn('flex min-w-0 gap-x-1 justify-end', canAbort && hasContent ? 'items-end' : 'items-center')}>
+                            <div className={cn('flex gap-x-1 flex-shrink-0', canAbort && hasContent ? 'items-end' : 'items-center')}>
                                 {!isBtw ? <button
                                     type="button"
                                     className={footerIconButtonClass}

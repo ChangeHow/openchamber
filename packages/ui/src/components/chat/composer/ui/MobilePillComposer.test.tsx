@@ -19,6 +19,7 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
     const root = createRoot(container);
     let primaryActions = 0;
     let queued = 0;
+    let aborted = 0;
     try {
         await act(async () => root.render(
         <SyncProvider directory="/fixture" sdk={OpenCode.make({ baseUrl: "http://opencode.test", fetch: async () => new Response("[]", { headers: { "content-type": "application/json" } }) })}>
@@ -44,7 +45,7 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
                 onOpenPrPicker={() => {}}
                 onOpenAttachSheet={() => {}}
                 onStartDictation={() => {}}
-                onAbort={() => {}}
+                onAbort={() => { aborted += 1; }}
             />
         </I18nProvider>
         </ThemeSystemProvider>
@@ -63,6 +64,26 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
             expect(primaryActions).toBe(1);
             expect(queued).toBe(0);
         }
+        if (options.canAbort) {
+            const stop = container.querySelector<HTMLButtonElement>('[aria-label="Stop generating"]');
+            expect(stop).not.toBeNull();
+            const pill = container.querySelector('[data-mobile-composer-pill]');
+            const actions = container.querySelector('[data-mobile-composer-actions]');
+            expect(actions).not.toBeNull();
+            expect(actions?.previousElementSibling).toBe(pill);
+            expect(stop?.parentElement).toBe(actions);
+            expect(actions?.lastElementChild).toBe(stop);
+            expect(actions?.children).toHaveLength(options.hasContent ? 3 : 1);
+            if (options.hasContent) {
+                const divider = stop?.previousElementSibling;
+                expect(divider?.getAttribute('aria-hidden')).toBe('true');
+                expect(divider?.className).toContain('w-6');
+                expect(divider?.previousElementSibling?.getAttribute('aria-label')).toBe('Queue message');
+                expect(stop?.querySelector('svg')?.classList.contains('size-5')).toBe(true);
+            }
+            await act(async () => { stop?.click(); });
+            expect(aborted).toBe(1);
+        }
         return container.innerHTML;
     } finally {
         await act(async () => root.unmount());
@@ -79,7 +100,7 @@ describe('MobilePillComposer', () => {
         const markup = await renderPill({ hasContent: true, newSessionDraftOpen: false });
 
         expect(markup).toContain('aria-label="Send message"');
-        expect(markup).toContain('w-0 opacity-0 overflow-hidden');
+        expect(markup).not.toContain('data-mobile-composer-actions="true"');
     });
 
     test('uses the trailing action to queue content while the session is running', async () => {
@@ -91,28 +112,28 @@ describe('MobilePillComposer', () => {
         expect(markup).toContain('aria-label="Queue message"');
         expect(markup).toContain('-rotate-90');
         expect(markup).not.toContain('aria-label="Send message"');
-        expect(markup).not.toContain('w-0 opacity-0 overflow-hidden');
-        expect(markup.indexOf('aria-label="Stop generating"')).toBeLessThan(markup.indexOf('aria-label="Queue message"'));
+        expect(markup).toContain('data-mobile-composer-actions="true"');
+        expect(markup.indexOf('aria-label="Queue message"')).toBeLessThan(markup.indexOf('aria-label="Stop generating"'));
     });
 
     test('uses the inline send action for content in a new-session draft', async () => {
         const markup = await renderPill({ hasContent: true, newSessionDraftOpen: true });
 
         expect(markup).toContain('aria-label="Send message"');
-        expect(markup).toContain('w-0 opacity-0 overflow-hidden');
+        expect(markup).not.toContain('data-mobile-composer-actions="true"');
     });
 
-    test('keeps the trailing slot collapsed for an empty existing session', async () => {
+    test('hides the action pill for an empty existing session', async () => {
         const markup = await renderPill({ hasContent: false, newSessionDraftOpen: false });
 
-        expect(markup).toContain('w-0 opacity-0 overflow-hidden');
+        expect(markup).not.toContain('data-mobile-composer-actions="true"');
         expect(markup).not.toContain('aria-label="Send message"');
     });
 
-    test('keeps the trailing action collapsed for an empty new-session draft', async () => {
+    test('hides the action pill for an empty new-session draft', async () => {
         const markup = await renderPill({ hasContent: false, newSessionDraftOpen: true });
 
-        expect(markup).toContain('w-0 opacity-0 overflow-hidden');
+        expect(markup).not.toContain('data-mobile-composer-actions="true"');
         expect(markup).not.toContain('aria-label="Send message"');
     });
 
@@ -120,7 +141,8 @@ describe('MobilePillComposer', () => {
         const markup = await renderPill({ hasContent: false, newSessionDraftOpen: false, canAbort: true });
 
         expect(markup).toContain('aria-label="Stop generating"');
-        expect(markup).toContain('w-0 opacity-0 overflow-hidden');
+        expect(markup).toContain('data-mobile-composer-actions="true"');
+        expect(markup).not.toContain('aria-label="Queue message"');
         expect(markup).not.toContain('aria-label="Send message"');
     });
 });

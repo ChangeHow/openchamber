@@ -421,6 +421,18 @@ transcript fetching or Small Model generation.
 
 ## Mobile
 
+While a turn runs, the collapsed composer puts Queue above Stop in one
+vertical glass action pill beside the input, rather than keeping Stop inside
+the input. A short, faint divider separates the equally sized button slots;
+Stop uses a 20px icon beside Queue, rather than its standalone 24px icon.
+Queue appears only when there is a draft;
+without one the action
+pill holds Stop alone. An idle composer keeps Send inside the input. The model
+and agent row stays inside the collapsed composer. The action pill is outside
+the glass box measured by the native iOS pill-to-composer morph.
+The expanded mobile composer's Queue and Stop buttons keep the same order in
+the footer's layout, leaving the prompt clear of the Queue button.
+
 `state/useMobileComposerShell.ts` and `state/useMobileViewportPin.ts` are
 mostly not state machines but corrections for specific platform behaviors:
 mobile browsers dismissing the keyboard before a tap's click lands, iOS

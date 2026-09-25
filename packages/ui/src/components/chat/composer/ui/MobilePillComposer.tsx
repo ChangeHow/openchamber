@@ -8,8 +8,8 @@
  * effect.
  *
  * With content, the inner end slot sends while the session is idle. While it
- * is running, abort keeps that slot and a round queue action appears beside
- * the pill; otherwise nothing sits beside it.
+ * is running, a separate vertical action pill holds queue above stop (when
+ * there is a draft); otherwise nothing sits beside the composer.
  */
 
 import type React from 'react';
@@ -83,7 +83,6 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
         onAbort,
     } = props;
     const canPrimaryAction = hasContent && Boolean(currentSessionId || newSessionDraftOpen);
-    const showTrailingSendAction = canPrimaryAction && canAbort;
 
     return (
         <div className="flex flex-col">
@@ -151,33 +150,7 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
                 >
                     <Icon name="mic" className={cn(iconSizeClass, 'text-current')} />
                 </button>
-                {/* Same visibility rule as the full composer's stop control:
-                    while a turn is running the stop button takes the mic's
-                    end slot and the mic shifts one slot left. Instant swap —
-                    no shape animation (WKWebView). */}
-                {canAbort ? (
-                    <button
-                        type="button"
-                        className={cn(footerIconButtonClass, 'text-[var(--status-error)] hover:text-[var(--status-error)]')}
-                        // The pill shows only while the keyboard is down — the
-                        // tap must abort in place, never focus/expand the
-                        // composer or raise the keyboard.
-                        onMouseDown={(event) => event.preventDefault()}
-                        onPointerDownCapture={(event) => {
-                            if (event.pointerType === 'touch') {
-                                event.preventDefault();
-                            }
-                        }}
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onAbort();
-                        }}
-                        title={t('chat.chatInput.actions.stopGeneratingAria')}
-                        aria-label={t('chat.chatInput.actions.stopGeneratingAria')}
-                    >
-                        <StopIcon className={cn(stopIconSizeClass)} />
-                    </button>
-                ) : canPrimaryAction ? (
+                {!canAbort && canPrimaryAction ? (
                     <Button
                         type="button"
                         variant="ghost"
@@ -193,29 +166,49 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
             </div>
             {bottomRow}
             </div>
-            {/* While running, Abort owns the pill's end slot and this outer
-                button queues the draft, with the same rotated icon and label
-                the expanded composer uses for that state. Collapsed otherwise. */}
-            <div
-                className={cn(
-                    'flex-shrink-0 transition-all duration-200 ease-out',
-                    // The gap lives on the slot, so a collapsed slot leaves
-                    // the pill exactly as wide as the expanded box.
-                    showTrailingSendAction ? 'ml-2 w-11 opacity-100' : 'w-0 opacity-0 overflow-hidden',
-                )}
-            >
-                <button
-                    type="button"
-                    className="oc-glass-composer flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-border/80 text-primary shadow-[0_4px_16px_-4px_rgb(0_0_0_/_0.12)] hover:text-primary"
-                    onClick={onQueueMessage}
-                    disabled={!showTrailingSendAction}
-                    tabIndex={showTrailingSendAction ? undefined : -1}
-                    title={t('chat.chatInput.actions.queueMessageAria')}
-                    aria-label={t('chat.chatInput.actions.queueMessageAria')}
+            {canAbort ? (
+                <div
+                    data-mobile-composer-actions="true"
+                    className="oc-glass-composer ml-2 flex w-11 flex-shrink-0 flex-col self-center overflow-hidden rounded-full border border-border/80 shadow-[0_4px_16px_-4px_rgb(0_0_0_/_0.12)]"
                 >
-                    <Icon name="send-plane-2" className={cn(sendIconSizeClass, '-rotate-90', 'text-current')} />
-                </button>
-            </div>
+                    {canPrimaryAction ? (
+                        <>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-11 rounded-none text-primary hover:text-primary"
+                                onClick={onQueueMessage}
+                                title={t('chat.chatInput.actions.queueMessageAria')}
+                                aria-label={t('chat.chatInput.actions.queueMessageAria')}
+                            >
+                                <Icon name="send-plane-2" className={cn(sendIconSizeClass, '-rotate-90', 'text-current')} />
+                            </Button>
+                            <span aria-hidden="true" className="h-px w-6 self-center bg-border/50" />
+                        </>
+                    ) : null}
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-11 rounded-none text-[var(--status-error)] hover:text-[var(--status-error)]"
+                        // The tap must abort in place, never focus/expand the
+                        // composer or raise the keyboard.
+                        onMouseDown={(event) => event.preventDefault()}
+                        onPointerDownCapture={(event) => {
+                            if (event.pointerType === 'touch') event.preventDefault();
+                        }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onAbort();
+                        }}
+                        title={t('chat.chatInput.actions.stopGeneratingAria')}
+                        aria-label={t('chat.chatInput.actions.stopGeneratingAria')}
+                    >
+                        <StopIcon className={canPrimaryAction ? 'size-5' : stopIconSizeClass} />
+                    </Button>
+                </div>
+            ) : null}
         </div>
         </div>
     );
