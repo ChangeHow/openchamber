@@ -74,7 +74,7 @@ export const ComposerActionButtons = React.memo(function ComposerActionButtons(p
     }
 
     return (
-        <div className={isMobile ? 'flex flex-col items-center gap-y-1' : 'relative'}>
+        <div className="relative">
             {hasContent ? (
                 <button
                     type="button"
@@ -87,7 +87,7 @@ export const ComposerActionButtons = React.memo(function ComposerActionButtons(p
                     }}
                     className={cn(
                         footerIconButtonClass,
-                        !isMobile && 'absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-1',
+                        'absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-1',
                         currentSessionId ? 'text-primary hover:text-primary' : 'opacity-30'
                     )}
                     aria-label={t('chat.chatInput.actions.queueMessageAria')}

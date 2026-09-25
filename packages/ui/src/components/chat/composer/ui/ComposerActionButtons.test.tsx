@@ -31,16 +31,16 @@ const renderActions = (isMobile: boolean) => {
 };
 
 describe('ComposerActionButtons', () => {
-    test('reserves footer space for queue above stop on mobile', async () => {
+    test('keeps queue floating above stop on mobile with a larger icon', async () => {
         const { win, actions } = renderActions(true);
         try {
             const queue = actions?.querySelector('[aria-label="Queue message"]');
             const stop = actions?.querySelector('[aria-label="Stop generating"]');
 
-            expect(actions?.classList.contains('flex-col')).toBe(true);
+            expect(actions?.classList.contains('relative')).toBe(true);
             expect(actions?.firstElementChild).toBe(queue);
             expect(actions?.lastElementChild).toBe(stop);
-            expect(queue?.classList.contains('absolute')).toBe(false);
+            expect(queue?.classList.contains('absolute')).toBe(true);
             expect(queue?.querySelector('svg')?.classList.contains('size-5')).toBe(true);
         } finally {
             await win.happyDOM.close();

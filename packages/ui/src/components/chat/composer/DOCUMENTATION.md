@@ -430,8 +430,9 @@ without one the action
 pill holds Stop alone. An idle composer keeps Send inside the input. The model
 and agent row stays inside the collapsed composer. The action pill is outside
 the glass box measured by the native iOS pill-to-composer morph.
-The expanded mobile composer's Queue and Stop buttons keep the same order in
-the footer's layout, leaving the prompt clear of the Queue button.
+The expanded mobile composer keeps Queue floating above Stop, so the footer
+does not grow when a draft is queued. Queue uses a 20px icon to balance Stop;
+near the end of a long prompt, text may sit beneath the floating button.
 
 `state/useMobileComposerShell.ts` and `state/useMobileViewportPin.ts` are
 mostly not state machines but corrections for specific platform behaviors:
