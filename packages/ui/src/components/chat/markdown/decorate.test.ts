@@ -38,6 +38,7 @@ describe('Markdown table actions', () => {
       <tbody>
         <tr><td>Example</td><td><a href="https://example.test/reviews/42">Review request</a> and <a href="/docs/start">guide</a></td></tr>
         <tr><td>Docs</td><td><a href="https://example.test/docs">Documentation</a></td></tr>
+        <tr><td>Files</td><td><a href="https://example.test/my file.txt">Remote file</a> and <a href="my file.txt">Local file</a> and <a>plain text</a></td></tr>
       </tbody>
     </table>`;
     document.body.appendChild(root);
@@ -50,10 +51,13 @@ describe('Markdown table actions', () => {
       }
 
       expect(copied).toEqual([
-        '| Repository | Review |\n| --- | --- |\n| Example | [Review request](https://example.test/reviews/42) and [guide](/docs/start) |\n| Docs | [Documentation](https://example.test/docs) |',
-        'Repository,Review\nExample,https://example.test/reviews/42 and /docs/start\nDocs,https://example.test/docs',
-        'Repository\tReview\nExample\thttps://example.test/reviews/42 and /docs/start\nDocs\thttps://example.test/docs',
+        '| Repository | Review |\n| --- | --- |\n| Example | [Review request](https://example.test/reviews/42) and [guide](/docs/start) |\n| Docs | [Documentation](https://example.test/docs) |\n| Files | [Remote file](https://example.test/my%20file.txt) and [Local file](my%20file.txt) and plain text |',
+        'Repository,Review\nExample,https://example.test/reviews/42 and /docs/start\nDocs,https://example.test/docs\nFiles,https://example.test/my%20file.txt and my%20file.txt and plain text',
+        'Repository\tReview\nExample\thttps://example.test/reviews/42 and /docs/start\nDocs\thttps://example.test/docs\nFiles\thttps://example.test/my%20file.txt and my%20file.txt and plain text',
       ]);
+      const reparsed = marked.parse(copied[0] ?? '');
+      expect(reparsed).toContain('href="https://example.test/my%20file.txt"');
+      expect(reparsed).toContain('href="my%20file.txt"');
     } finally {
       detach();
       root.remove();

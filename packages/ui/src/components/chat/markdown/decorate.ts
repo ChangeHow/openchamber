@@ -298,14 +298,15 @@ const tableCellText = (cell: Element, markdown: boolean): string => {
     if (node.tagName === 'A') {
       const href = node.getAttribute('href');
       if (href) {
+        const url = href.replace(/ /g, '%20');
         // Keep URLs bare in CSV/TSV so spreadsheet apps can recognize link-only cells.
-        if (!markdown) return href;
+        if (!markdown) return url;
         // Escape opening and closing square brackets in the link label.
         const escapedLabel = escapeMarkdownCellText(node.textContent ?? '').replace(/\[/g, '\\[').replace(/\]/g, '\\]');
         // Encode pipes in URLs so the table parser does not split the cell.
-        const url = href.replace(/\|/g, '%7C');
+        const destinationUrl = url.replace(/\|/g, '%7C');
         // Parentheses require an angle-bracket destination; encode literal angle brackets inside it.
-        const destination = /[()]/.test(url) ? `<${url.replace(/</g, '%3C').replace(/>/g, '%3E')}>` : url;
+        const destination = /[()]/.test(destinationUrl) ? `<${destinationUrl.replace(/</g, '%3C').replace(/>/g, '%3E')}>` : destinationUrl;
         return `[${escapedLabel}](${destination})`;
       }
     }
