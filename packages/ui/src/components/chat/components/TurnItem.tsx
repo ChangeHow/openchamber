@@ -3,6 +3,10 @@ import React from 'react';
 import { useDeviceInfo } from '@/lib/device';
 import type { ChatMessageEntry, Turn } from '../lib/turns/types';
 import TurnAssistantBlock from './TurnAssistantBlock';
+import { ConversationSelectionItem } from '../export/ConversationSelectionItem';
+import { conversationSelectionKey } from '../export/selectionStore';
+import { hasConversationExportContent } from '../export/selectedMessages';
+import { isHiddenUserMessage } from '../message/hiddenUserMessage';
 
 interface TurnItemProps {
     turn: Turn;
@@ -35,6 +39,11 @@ const STICKY_HEADER_BACKGROUND_MOBILE = stickyHeaderBackground('0.75rem');
 
 const TurnItem: React.FC<TurnItemProps> = ({ turn, stickyUserHeader = true, renderMessage, assistantContent }) => {
     const { isMobile } = useDeviceInfo();
+    const userContent = (
+        <ConversationSelectionItem selectionKey={conversationSelectionKey('user', turn.userMessage.info.id)} role="user" eligible={turn.userMessage.info.role === 'user' && !isHiddenUserMessage(turn.userMessage)}>
+            {renderMessage(turn.userMessage)}
+        </ConversationSelectionItem>
+    );
     return (
         <section
             className="relative w-full"
@@ -48,14 +57,16 @@ const TurnItem: React.FC<TurnItemProps> = ({ turn, stickyUserHeader = true, rend
                     style={isMobile ? STICKY_HEADER_BACKGROUND_MOBILE : STICKY_HEADER_BACKGROUND_DESKTOP}
                 >
                     <div className="relative z-10">
-                        {renderMessage(turn.userMessage)}
+                        {userContent}
                     </div>
                 </div>
             ) : (
-                renderMessage(turn.userMessage)
+                userContent
             )}
 
-            {assistantContent ?? <TurnAssistantBlock turnId={turn.turnId} assistantMessages={turn.assistantMessages} renderMessage={renderMessage} />}
+            <ConversationSelectionItem selectionKey={conversationSelectionKey('assistant', turn.turnId)} role="assistant" eligible={turn.assistantMessages.some((entry) => hasConversationExportContent(entry.parts))}>
+                {assistantContent ?? <TurnAssistantBlock turnId={turn.turnId} assistantMessages={turn.assistantMessages} renderMessage={renderMessage} />}
+            </ConversationSelectionItem>
         </section>
     );
 };

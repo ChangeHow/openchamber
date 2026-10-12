@@ -24,6 +24,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import ChatEmptyState from './ChatEmptyState';
 import { useGlobalSyncStore } from '@/sync/global-sync-store';
 import MessageList, { type MessageListHandle } from './MessageList';
+import { ConversationSelectionContext } from './export/selectionContext';
+import { createConversationSelectionStore } from './export/selectionStore';
+import { ConversationExportComposer } from './export/ConversationExportComposer';
 import { createTimelineRevealGate, type TimelineRevealGate } from './timelineRevealGate';
 
 // How long the previous timeline stays on screen while a session that is not
@@ -823,6 +826,15 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     const currentSessionKey = currentSessionId
         ? JSON.stringify([getRuntimeKey(), effectiveSessionDirectory, currentSessionId])
         : null;
+    // Selection never outlives a navigation, including the deferred transcript hold.
+    const exportSelectionScope = JSON.stringify([currentSessionKey, liveSessionId, liveSessionDirectory]);
+    const [exportSelectionOwner, setExportSelectionOwner] = React.useState(() => ({
+        scope: exportSelectionScope, store: createConversationSelectionStore(),
+    }));
+    if (exportSelectionOwner.scope !== exportSelectionScope) {
+        setExportSelectionOwner({ scope: exportSelectionScope, store: createConversationSelectionStore() });
+    }
+    const conversationSelection = exportSelectionOwner.store;
     // A deferred switch can keep the previous transcript on screen after the
     // selected session changes. Protect what is actually rendered until commit.
     React.useLayoutEffect(() => {
@@ -1803,6 +1815,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 			className="flex h-full min-h-0 bg-background"
 		>
 		<ChatColumnSessionContext.Provider value={chatColumnSession}>
+		<ConversationSelectionContext.Provider value={conversationSelection}>
 		<ChatColumnActionsContext.Provider value={columnActions}>
 		<ChatColumnExpandedInputContext.Provider value={pinnedExpandedInputValue}>
 		{/* One mobile comment controller per column: selections in this column
@@ -1919,6 +1932,16 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                         ) : null}
                     </div>
                 )}
+                <ConversationExportComposer
+                    columnRef={columnRootRef}
+                    getMessages={() => {
+                        const state = effectiveSessionDirectory ? childStores.getChild(effectiveSessionDirectory)?.getState() : undefined;
+                        return timelineController.renderedMessages.map((entry) => ({
+                            ...entry,
+                            parts: state?.part[entry.info.id] ?? entry.parts,
+                        }));
+                    }}
+                >
                 {promptReadOnly ? (
                     <>
                         {/* The docks live inside ChatInput, which a read-only
@@ -1954,6 +1977,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                         draftPresentationExiting={draftPresentationExiting}
                     />
                 )}
+                </ConversationExportComposer>
             </div>
 
             {/* Inside the chat column, not beside it: as a row sibling it took
@@ -1984,6 +2008,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         </MobileCommentComposerContext.Provider>
         </ChatColumnExpandedInputContext.Provider>
         </ChatColumnActionsContext.Provider>
+		</ConversationSelectionContext.Provider>
         </ChatColumnSessionContext.Provider>
         {/* Kept mounted while it could ever show, so it can fade out and back
             in; `visible` drives that, and `reserved` keeps its column in the
