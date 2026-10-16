@@ -3495,6 +3495,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.workStatus.action.openSubagent': 'Abrir {name}',
   'chat.workStatus.section.usage': 'Uso',
   'chat.workStatus.section.telemetry': 'Estadísticas del turno',
+  'chat.workStatus.telemetry.liveSpeedValue': 'Est. ~{rate} tok/s',
+  'chat.workStatus.telemetry.liveSpeedDescription': 'Entrega de texto estimada durante un máximo de 5 segundos: {rate} tok/s. Excluye el razonamiento y la salida de herramientas; el almacenamiento en búfer de la red afecta al valor. Al finalizar, muestra la velocidad de respuesta basada en los datos de uso.',
   'chat.workStatus.telemetry.responseSpeed': 'Respuesta',
   'chat.workStatus.telemetry.responseSpeedDescription': 'La velocidad a la que llegó el texto final. Excluye la espera inicial, el razonamiento y las llamadas anteriores a herramientas. Es una estimación basada en las marcas de tiempo del texto, no una medición del proveedor.',
   'chat.workStatus.telemetry.speed': 'Solicitud',

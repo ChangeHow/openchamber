@@ -691,6 +691,16 @@ A turn is marked stopped only when OpenCode says it stopped: a `session.executio
 
 Directory stores also own session-keyed sidecar notification channels for permissions, forms, and message materialization. Collapsed sidebar rows group their hidden descendants by owning directory and subscribe to the exact permission and form buckets; expanded rows subscribe only to their own buckets. High-frequency realtime part events annotate the exact session/message before committing, so visible records, user history, renderability, and sidebar permission and question rows are not notified by unrelated sessions. Structural message replacements notify only changed subscribed session buckets; unannotated bulk part replacement conservatively resets active message subscribers so bootstrap, pagination, rollback, and legacy writers cannot leave stale projections.
 
+`subscribeDirectoryTextDeltas` is a separate live-arrival channel for the work-status
+speed estimate. After a text delta is reduced, it publishes only the appended
+suffix, excluding any overlap removed by the reducer. It requires a busy status
+in the ordered draft and the current runtime. History loads, snapshots, reasoning
+and tool output never publish samples. Listeners belong to one directory store
+and session and are removed on unsubscribe. With no listener, the channel returns
+before reading any parts. Consumers accumulate numeric samples without notifying
+React at delta frequency; the work-status leaf reads them on the shared one-second
+ticker. This channel does not change store publication or stream delivery timing.
+
 Message sidecar consumers also filter targeted updates by purpose before notifying React. Suspended live-tail text/reasoning changes do not rebuild visible message records, but structural Task session identity changes bypass suspension so a parent can link a newly created subagent immediately. Assistant-only part changes do not rebuild user input history, and targeted updates that preserve authoritative part buckets do not recheck a session that is already renderable. Message replacements, removed final part buckets, and conservative resets always notify.
 
 ## Session directory resolution

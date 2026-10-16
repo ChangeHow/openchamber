@@ -35,6 +35,16 @@ const localeDictionaries = {
 } as const;
 
 describe('i18n dictionaries', () => {
+  test('live speed is explicitly estimated and explained in every locale', () => {
+    for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
+      const value = dictionary['chat.workStatus.telemetry.liveSpeedValue'];
+      const description = dictionary['chat.workStatus.telemetry.liveSpeedDescription'];
+      expect(value).toContain('{rate}');
+      expect(description).toContain('{rate}');
+      expect(description).toContain('5');
+      if (locale !== 'en') expect(description).not.toBe(enDict['chat.workStatus.telemetry.liveSpeedDescription']);
+    }
+  });
   test('repository links name either provider in every locale', () => {
     for (const dictionary of Object.values(localeDictionaries)) {
       expect(dictionary['gitView.header.openRepository']).toContain('{provider}');

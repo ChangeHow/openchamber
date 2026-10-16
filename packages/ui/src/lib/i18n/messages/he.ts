@@ -3461,6 +3461,8 @@ export const dict = {
   'chat.workStatus.action.openSubagent': 'פתח את {name}',
   'chat.workStatus.section.usage': 'שימוש',
   'chat.workStatus.section.telemetry': 'נתוני התור',
+  'chat.workStatus.telemetry.liveSpeedValue': 'הערכה ~{rate} טוקנים/שנ׳',
+  'chat.workStatus.telemetry.liveSpeedDescription': 'קצב הגעת טקסט משוער לאורך עד 5 שניות: {rate} טוקנים לשנייה. אינו כולל חשיבה ופלט כלים, ומושפע מאגירת נתונים ברשת. בסיום מוצג קצב התגובה על סמך נתוני השימוש.',
   'chat.workStatus.telemetry.responseSpeed': 'תגובה',
   'chat.workStatus.telemetry.responseSpeedDescription': 'באיזו מהירות הגיע הטקסט הסופי. לא כולל את ההמתנה הראשונית, החשיבה וקריאות קודמות לכלים. הערכה לפי חותמות הזמן של הטקסט, לא מדידת מהירות של הספק.',
   'chat.workStatus.telemetry.speed': 'התור כולו',

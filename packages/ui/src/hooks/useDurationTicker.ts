@@ -27,7 +27,7 @@ const getTickerChannel = (intervalMs: number): TickerChannel => {
     return created;
 };
 
-const subscribeToTicker = (intervalMs: number, subscriber: Subscriber): (() => void) => {
+export const subscribeToTicker = (intervalMs: number, subscriber: Subscriber): (() => void) => {
     const channel = getTickerChannel(intervalMs);
     channel.subscribers.add(subscriber);
     subscriber(Date.now());

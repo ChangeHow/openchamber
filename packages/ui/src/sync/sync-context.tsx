@@ -23,6 +23,7 @@ import { useGlobalSyncStore } from "./global-sync-store"
 import {
   ChildStoreManager,
   markDirectorySessionPartChanged,
+  publishDirectoryTextDelta,
   subscribeDirectoryPermission,
   subscribeDirectoryPermissions,
   subscribeDirectoryForms,
@@ -2240,6 +2241,7 @@ export function handleEvent(
   }
 
   countSyncPerformance("reducerEvents")
+  const previousDeltaParts = payload.type === "message.part.delta" ? draft.part[payload.properties.messageID] : undefined
   // A catalog event names the location it was rebuilt in; for an open
   // directory it lands here rather than in the global branch above.
   const reducerResult = applyDirectoryEvent(draft, payload, {
@@ -2279,6 +2281,9 @@ export function handleEvent(
 
   if (reducerChanged) {
     countSyncPerformance("reducerChangedEvents")
+    if (payload.type === "message.part.delta" && expectedRuntimeKey === getRuntimeKey()) {
+      publishDirectoryTextDelta(store, draft, payload.properties, previousDeltaParts)
+    }
     const eventSessionID = syncEventSessionID(payload)
     const eventMessageID = syncEventMessageID(payload)
     if (isPartEvent(payload.type) && eventMessageID) {

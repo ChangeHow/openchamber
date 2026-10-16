@@ -7,6 +7,8 @@ import { normalizePath } from "@/lib/pathNormalization"
 import { startSessionLoadPerformanceEvent } from "./session-load-performance"
 import { countSyncPerformance } from "./performance-diagnostics"
 import { isFilesystemError } from "@/lib/api/files-errors"
+import type { SyncEvent } from "@/lib/opencode/events"
+import type { Part } from "@/lib/opencode/model"
 
 export type DirectoryStore = State & {
   /** Apply a partial state update */
@@ -29,6 +31,46 @@ type SessionMessageChange = {
 type SessionMessageSubscriber = (change: SessionMessageChange) => void
 const messageSubscribersByStore = new WeakMap<StoreApi<DirectoryStore>, Map<string, Set<SessionMessageSubscriber>>>()
 const pendingPartChangesByStore = new WeakMap<StoreApi<DirectoryStore>, Map<string, Set<string>>>()
+
+type TextDeltaSubscriber = (delta: string) => void
+const textDeltaSubscribers = new WeakMap<StoreApi<DirectoryStore>, Map<string, Set<TextDeltaSubscriber>>>()
+
+/** Live arrivals only: snapshots and materialized history never publish here. */
+export function subscribeDirectoryTextDeltas(store: StoreApi<DirectoryStore>, sessionID: string, listener: TextDeltaSubscriber): () => void {
+  let bySession = textDeltaSubscribers.get(store)
+  if (!bySession) {
+    bySession = new Map()
+    textDeltaSubscribers.set(store, bySession)
+  }
+  let listeners = bySession.get(sessionID)
+  if (!listeners) {
+    listeners = new Set()
+    bySession.set(sessionID, listeners)
+  }
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) bySession.delete(sessionID)
+    if (bySession.size === 0) textDeltaSubscribers.delete(store)
+  }
+}
+
+export function publishDirectoryTextDelta(
+  store: StoreApi<DirectoryStore>,
+  state: State,
+  delta: Extract<SyncEvent, { type: "message.part.delta" }>["properties"],
+  previousParts: readonly Part[] | undefined,
+): void {
+  const listeners = textDeltaSubscribers.get(store)?.get(delta.sessionID)
+  if (!listeners?.size || delta.field !== "text" || !delta.delta || state.session_status?.[delta.sessionID]?.type !== "busy") return
+  const previous = previousParts?.find((part) => part.id === delta.partID)
+  const next = state.part[delta.messageID]?.find((part) => part.id === delta.partID)
+  if (previous?.type !== "text" || next?.type !== "text") return
+  // The reducer may have removed overlap with a reconnect snapshot.
+  const appended = next.text.slice(previous.text.length)
+  if (!appended) return
+  for (const listener of listeners) listener(appended)
+}
 
 export function subscribeDirectorySessionMessages(
   store: StoreApi<DirectoryStore>,

@@ -1,7 +1,10 @@
 import React from 'react';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useDirectorySync, useSessionMessageRecords, useSyncDirectory, useSyncRuntime } from '@/sync/sync-context';
+import { useDirectoryStore, useDirectorySync, useSessionMessageRecords, useSyncDirectory, useSyncRuntime } from '@/sync/sync-context';
+import { subscribeDirectoryTextDeltas } from '@/sync/child-store';
+import { subscribeToTicker } from '@/hooks/useDurationTicker';
+import { createLiveTextRateSampler } from './liveTextRate';
 import { normalizePath } from '@/lib/pathNormalization';
 import {
   WorkStatusCollapsibleSection,
@@ -20,6 +23,38 @@ import {
 type Props = {
   sessionId: string | null;
   directory: string | null;
+};
+
+/** Sampling only rerenders this value, never the completed metrics or transcript. */
+const LiveResponseSpeed: React.FC<{ sessionId: string; directory: string | null }> = ({ sessionId, directory }) => {
+  const { t } = useI18n();
+  const store = useDirectoryStore(directory ?? undefined);
+  const source = React.useMemo(() => {
+    const sampler = createLiveTextRateSampler();
+    let rate: number | null = null;
+    return {
+      getSnapshot: () => rate,
+      subscribe: (notify: () => void) => {
+        const unsubscribeText = subscribeDirectoryTextDeltas(store, sessionId, (delta) => sampler.observe(delta, performance.now()));
+        const unsubscribeTicker = subscribeToTicker(1000, () => {
+          const next = sampler.read(performance.now());
+          if (rate !== next) {
+            rate = next;
+            notify();
+          }
+        });
+        return () => {
+          unsubscribeText();
+          unsubscribeTicker();
+        };
+      },
+    };
+  }, [store, sessionId]);
+  const rate = React.useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot);
+  if (rate === null) return null;
+  const value = Math.round(rate);
+  const description = t('chat.workStatus.telemetry.liveSpeedDescription', { rate: value });
+  return <span dir="auto" title={description} aria-label={description}>{t('chat.workStatus.telemetry.liveSpeedValue', { rate: value })}</span>;
 };
 
 /** One hover/focus target covers both the label and its value. */
@@ -72,9 +107,12 @@ export const WorkStatusTelemetrySection: React.FC<Props> = ({ sessionId, directo
     }
   }, [scope, status, eligibleForStats, computed]);
   const stats = eligibleForStats ? computed : status !== 'unknown' && retained?.scope === scope ? retained.stats : null;
-  const summary = stats && stats.responseTokensPerSecond !== null
+  const completedSummary = stats && stats.responseTokensPerSecond !== null
     ? formatThroughputRate(stats.responseTokensPerSecond)
     : undefined;
+  const summary = status === 'busy' && sessionId
+    ? <LiveResponseSpeed key={scope} sessionId={sessionId} directory={directory} />
+    : completedSummary;
 
   useReportWorkStatusPresence('telemetry', Boolean(sessionId));
 

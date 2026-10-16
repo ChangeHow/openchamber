@@ -3504,6 +3504,8 @@ export const dict = {
   'chat.workStatus.action.openSubagent': '{name} öffnen',
   'chat.workStatus.section.usage': 'Nutzung',
   'chat.workStatus.section.telemetry': 'Turn-Statistiken',
+  'chat.workStatus.telemetry.liveSpeedValue': 'Geschätzt ~{rate} tok/s',
+  'chat.workStatus.telemetry.liveSpeedDescription': 'Geschätzte Textübertragung über bis zu 5 Sekunden: {rate} tok/s. Ohne Denkprozess und Werkzeugausgabe; Netzwerkpuffer beeinflussen den Wert. Nach Abschluss wird die Antwortgeschwindigkeit anhand der Nutzungsdaten angezeigt.',
   'chat.workStatus.telemetry.responseSpeed': 'Antwort',
   'chat.workStatus.telemetry.responseSpeedDescription': 'Wie schnell der abschließende Text ankam. Ohne anfängliche Wartezeit, Denken und frühere Werkzeugaufrufe. Eine Schätzung aus Textzeitstempeln, keine Geschwindigkeitsmessung des Anbieters.',
   'chat.workStatus.telemetry.speed': 'Anfrage',

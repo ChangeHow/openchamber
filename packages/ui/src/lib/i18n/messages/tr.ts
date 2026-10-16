@@ -3309,6 +3309,8 @@ export const dict = {
   'chat.workStatus.action.openSubagent': '{name} öğesini aç',
   'chat.workStatus.section.usage': 'Kullanım',
   'chat.workStatus.section.telemetry': 'Tur istatistikleri',
+  'chat.workStatus.telemetry.liveSpeedValue': 'Tahmini ~{rate} tok/s',
+  'chat.workStatus.telemetry.liveSpeedDescription': 'En fazla 5 saniyelik tahmini metin geliş hızı: {rate} tok/s. Akıl yürütme ve araç çıktıları hariçtir; ağ arabelleği değeri etkiler. Tamamlandığında kullanım verilerine dayalı yanıt hızı gösterilir.',
   'chat.workStatus.telemetry.responseSpeed': 'Yanıt',
   'chat.workStatus.telemetry.responseSpeedDescription': 'Son metnin ne hızla geldiği. İlk bekleme, akıl yürütme ve önceki araç çağrıları dahil değildir. Metin zamanlarından hesaplanan bir tahmindir, sağlayıcı tarafındaki hız ölçümü değildir.',
   'chat.workStatus.telemetry.speed': 'Tüm istek',

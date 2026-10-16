@@ -3495,6 +3495,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.workStatus.action.openSubagent': 'Відкрити {name}',
   'chat.workStatus.section.usage': 'Використання',
   'chat.workStatus.section.telemetry': 'Статистика ходу',
+  'chat.workStatus.telemetry.liveSpeedValue': 'Оцінка ~{rate} ток/с',
+  'chat.workStatus.telemetry.liveSpeedDescription': 'Оцінка швидкості надходження тексту за період до 5 секунд: {rate} ток/с. Без міркувань і виводу інструментів; буферизація мережі впливає на значення. Після завершення показує швидкість відповіді за даними використання.',
   'chat.workStatus.telemetry.responseSpeed': 'Відповідь',
   'chat.workStatus.telemetry.responseSpeedDescription': 'Як швидко надходив фінальний текст. Без очікування на початок, міркувань і попередніх викликів інструментів. Це оцінка за часовими мітками тексту, а не вимір швидкості на сервері провайдера.',
   'chat.workStatus.telemetry.speed': 'Увесь запит',

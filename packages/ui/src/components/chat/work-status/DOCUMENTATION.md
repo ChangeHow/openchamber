@@ -115,7 +115,7 @@ which requests only providers enabled for this panel.
 | Subagent blockers | directory `permission` / `question` maps | one subscription covers every child |
 | Usage | `components/usage/usageGroups.ts` over `useQuotaStore` | grouping shared with the mobile popover; presentation is not |
 | Linked threads | `lib/linkedIssues.ts` over session metadata | written by the flows that attach an issue or PR |
-| Turn stats | `telemetry.ts` over `useSessionMessageRecords` | computed while authoritatively idle, including when collapsed so the headline stays current; either rate above 5,000 tok/s is reported as unknown (see the two-rate description below) |
+| Turn stats | `telemetry.ts` over `useSessionMessageRecords`; live header via `subscribeDirectoryTextDeltas` and `liveTextRate.ts` | completed metrics compute only while authoritatively idle; busy headers estimate text arrival speed without reading history |
 | Goal | `useSessionGoal` | respects the Settings toggle |
 | MCP | `useMcpStore` | connect/disconnect reuses the dropdown's actions |
 | Pinned messages | `getContextObligatoryMessages` + `state.part`, else one `getSessionMessage` read | see below |
@@ -160,8 +160,8 @@ message's output tokens divided by the union of its nonempty text intervals.
 It excludes initial waiting, reasoning tokens and reasoning time, and earlier
 tool steps. It requires complete, valid text timing and a final message without
 tools, errors, synthetic text or ignored text. This measures text delivery from
-stored timestamps, not provider-side decode speed. The header shows only this
-rate; unavailable response timing never falls back to whole-turn speed.
+stored timestamps, not provider-side decode speed. The completed header shows only
+this rate; unavailable response timing never falls back to whole-turn speed.
 
 Whole-turn speed uses output plus reasoning tokens from every step, divided by
 elapsed assistant time minus the union of completed and failed tool intervals.
@@ -190,10 +190,27 @@ status authority. Explicit idle events or a successful directory status snapshot
 allow computation even when collapsed: the response-speed headline remains visible
 and updates when a turn completes, after a remount, or when idle records change.
 The collapsed body stays unmounted. One component-owned committed result keeps the
-headline and rows stable during the next active turn. Its identity includes
+expanded rows stable during the next active turn. Its identity includes
 runtime, normalized directory and session. Scope changes discard it; fresh empty
 or reverted records clear it. There is no global message-ID cache. Corrections
 to existing message/part identities invalidate the current result.
+
+While busy, the header shows an explicitly estimated live rate in both collapsed
+and expanded states. Only text appended by live `message.part.delta` events counts;
+reasoning, tools, history loads and snapshot overlap do not. Sampling begins with
+the first observed delta and waits for one complete second. Every second, a leaf
+readout averages up to the last 5 completed one-second buckets; an unfinished
+bucket waits for the next tick. The sampler retains 6 numeric buckets and no text.
+It estimates one token per CJK BMP character and one per 4 other UTF-16 code units,
+including whitespace. Chunk boundaries do not change the estimate. Tokenization
+varies by model and language, and network batching changes arrival throughput.
+This is not provider decode speed. A pause decays to zero after the window empties.
+
+Idle replaces the live value with the existing usage-based response speed.
+Retry, unknown status, scope changes and unmounting discard live samples and
+release the delta and shared ticker subscriptions. Reopening a busy panel starts
+with newly observed text. Web and Electron share this behavior; VS Code, hosted
+mobile and Capacitor mobile keep the panel suppressed.
 
 ### Context usage has its own computation, on purpose
 

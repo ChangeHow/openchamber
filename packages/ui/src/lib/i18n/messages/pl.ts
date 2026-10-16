@@ -3511,6 +3511,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.workStatus.action.openSubagent': 'Otwórz {name}',
   'chat.workStatus.section.usage': 'Zużycie',
   'chat.workStatus.section.telemetry': 'Statystyki tury',
+  'chat.workStatus.telemetry.liveSpeedValue': 'Szac. ~{rate} tok/s',
+  'chat.workStatus.telemetry.liveSpeedDescription': 'Szacowana szybkość dostarczania tekstu z maksymalnie 5 sekund: {rate} tok/s. Bez rozumowania i wyników narzędzi; buforowanie sieci wpływa na wartość. Po zakończeniu pokazuje szybkość odpowiedzi obliczoną z danych o użyciu.',
   'chat.workStatus.telemetry.responseSpeed': 'Odpowiedź',
   'chat.workStatus.telemetry.responseSpeedDescription': 'Jak szybko docierał końcowy tekst. Bez początkowego oczekiwania, rozumowania i wcześniejszych wywołań narzędzi. To szacunek z czasów tekstu, a nie pomiar po stronie dostawcy.',
   'chat.workStatus.telemetry.speed': 'Całe żądanie',

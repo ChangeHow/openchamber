@@ -3505,6 +3505,8 @@ export const dict = {
   'chat.workStatus.action.openSubagent': 'Ouvrir {name}',
   'chat.workStatus.section.usage': 'Utilisation',
   'chat.workStatus.section.telemetry': 'Stats du tour',
+  'chat.workStatus.telemetry.liveSpeedValue': 'Estim. ~{rate} tok/s',
+  'chat.workStatus.telemetry.liveSpeedDescription': 'Débit de texte estimé sur 5 secondes au maximum : {rate} tok/s. Exclut le raisonnement et les sorties des outils ; la mise en tampon réseau influe sur cette valeur. À la fin, affiche la vitesse de réponse calculée à partir des données d\'utilisation.',
   'chat.workStatus.telemetry.responseSpeed': 'Réponse',
   'chat.workStatus.telemetry.responseSpeedDescription': 'La vitesse à laquelle le texte final est arrivé. Sans attente initiale, raisonnement ni appels précédents aux outils. Une estimation basée sur les horodatages du texte, pas une mesure du fournisseur.',
   'chat.workStatus.telemetry.speed': 'Requête',

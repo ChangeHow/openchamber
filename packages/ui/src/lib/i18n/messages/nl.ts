@@ -3506,6 +3506,8 @@ export const dict = {
   'chat.workStatus.action.openSubagent': '{name} openen',
   'chat.workStatus.section.usage': 'Gebruik',
   'chat.workStatus.section.telemetry': 'Beurtstatistieken',
+  'chat.workStatus.telemetry.liveSpeedValue': 'Geschat ~{rate} tok/s',
+  'chat.workStatus.telemetry.liveSpeedDescription': 'Geschatte tekstoverdracht over maximaal 5 seconden: {rate} tok/s. Exclusief redenering en tooluitvoer; netwerkbuffering beïnvloedt de waarde. Na afloop verschijnt de antwoordsnelheid op basis van gebruiksgegevens.',
   'chat.workStatus.telemetry.responseSpeed': 'Antwoord',
   'chat.workStatus.telemetry.responseSpeedDescription': 'Hoe snel de laatste tekst binnenkwam. Zonder de beginswachttijd, het redeneren en eerdere toolaanroepen. Een schatting op basis van teksttijdstempels, geen snelheidsmeting van de provider.',
   'chat.workStatus.telemetry.speed': 'Hele beurt',

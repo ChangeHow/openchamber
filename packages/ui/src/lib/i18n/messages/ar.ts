@@ -3461,6 +3461,8 @@ export const dict = {
   'chat.workStatus.action.openSubagent': 'فتح {name}',
   'chat.workStatus.section.usage': 'الاستخدام',
   'chat.workStatus.section.telemetry': 'إحصاءات الدور',
+  'chat.workStatus.telemetry.liveSpeedValue': 'تقديري ~{rate} رمز/ث',
+  'chat.workStatus.telemetry.liveSpeedDescription': 'سرعة وصول النص المقدرة خلال فترة تصل إلى 5 ثوانٍ: {rate} رمز/ث. تستثني الاستدلال ومخرجات الأدوات، وتتأثر بالتخزين المؤقت للشبكة. بعد الانتهاء تُعرض سرعة الاستجابة بناءً على بيانات الاستخدام.',
   'chat.workStatus.telemetry.responseSpeed': 'الرد',
   'chat.workStatus.telemetry.responseSpeedDescription': 'سرعة وصول النص النهائي. لا يشمل الانتظار الأولي ولا التفكير ولا استدعاءات الأدوات السابقة. هذا تقدير من الطوابع الزمنية للنص، وليس قياسًا للسرعة من الموفر.',
   'chat.workStatus.telemetry.speed': 'الدور كاملًا',

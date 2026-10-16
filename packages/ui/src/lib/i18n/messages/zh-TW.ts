@@ -3506,6 +3506,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.workStatus.action.openSubagent': '開啟 {name}',
   'chat.workStatus.section.usage': '用量',
   'chat.workStatus.section.telemetry': '輪次統計',
+  'chat.workStatus.telemetry.liveSpeedValue': '估算 ~{rate} tok/s',
+  'chat.workStatus.telemetry.liveSpeedDescription': '最近最多 5 秒的文字到達速度估算為 {rate} tok/s。不包含推理和工具輸出，受網路緩衝影響。完成後顯示基於實際用量的回覆速度。',
   'chat.workStatus.telemetry.responseSpeed': '回答速度',
   'chat.workStatus.telemetry.responseSpeedDescription': '最終文字到達的速度。不含開始前的等待、推理和先前的工具呼叫。這是根據文字時間戳記估算的速度，不是供應商測得的生成速度。',
   'chat.workStatus.telemetry.speed': '整個請求',

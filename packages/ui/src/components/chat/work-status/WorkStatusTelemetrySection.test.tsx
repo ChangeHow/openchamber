@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
@@ -6,7 +6,8 @@ import { OpenCode } from '@opencode/client';
 import type { AssistantMessage, Session, UserMessage } from '@/lib/opencode/model';
 import { useUIStore } from '@/stores/useUIStore';
 import { I18nProvider } from '@/lib/i18n';
-import { SyncProvider } from '@/sync/sync-context';
+import { createEventRoutingIndex, handleEvent, SyncProvider } from '@/sync/sync-context';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 import { getSyncChildStores } from '@/sync/sync-refs';
 import { getSyncPerformanceDiagnostics, resetSyncPerformanceDiagnostics, setSyncPerformanceDiagnosticsEnabled } from '@/sync/performance-diagnostics';
 let WorkStatusTelemetrySection: typeof import('./WorkStatusTelemetrySection').WorkStatusTelemetrySection;
@@ -38,7 +39,7 @@ const installDom = () => {
   for (const name of DOM_GLOBAL_NAMES) Object.defineProperty(globalThis, name, { value: values[name], configurable: true, writable: true });
   const container = document.createElement('div');
   document.body.appendChild(container);
-  return { container, restore: () => {
+  return { win, container, restore: () => {
     for (const [name, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
       else Reflect.deleteProperty(globalThis, name);
@@ -51,6 +52,45 @@ describe('mounted turn telemetry with live sync stores', () => {
   let root: Root;
   let dom: ReturnType<typeof installDom>;
   let messageRequests = 0;
+  const cleanups: Array<() => void> = [];
+  const liveClock = () => {
+    let now = 0;
+    const callbacks = new Map<ReturnType<typeof dom.win.setInterval>, () => void>();
+    const originalInterval = dom.win.setInterval.bind(dom.win);
+    const originalClear = dom.win.clearInterval.bind(dom.win);
+    const clock = spyOn(performance, 'now').mockImplementation(() => now);
+    const interval = spyOn(dom.win, 'setInterval').mockImplementation((handler, delay) => {
+      if (delay !== 1000) throw new Error('Expected one-second live ticker');
+      const id = originalInterval(() => undefined, 60000);
+      callbacks.set(id, () => handler());
+      return id;
+    });
+    const clear = spyOn(dom.win, 'clearInterval').mockImplementation((id) => { callbacks.delete(id); originalClear(id); });
+    cleanups.push(() => { clock.mockRestore(); interval.mockRestore(); clear.mockRestore(); });
+    return {
+      interval, clear,
+      tick: async (time: number) => {
+        now = time;
+        await act(async () => {
+          for (const handler of callbacks.values()) {
+            handler();
+          }
+        });
+      },
+    };
+  };
+  const beginLive = async () => {
+    await act(async () => {
+      useUIStore.getState().setWorkStatusSectionExpanded('telemetry', false);
+      store().setState({ session_status: { [sessionId]: { type: 'busy' } }, part: { [assistant.id]: [
+        { id: 'text', type: 'text', sessionID: sessionId, messageID: assistant.id, text: '' },
+      ] } });
+    });
+    const routing = createEventRoutingIndex();
+    return (text: string, dir = directory, id = sessionId) => handleEvent(dir, {
+      type: 'message.part.delta', properties: { sessionID: id, messageID: assistant.id, partID: 'text', field: 'text', delta: text },
+    }, getSyncChildStores(), routing, getRuntimeKey());
+  };
   // Keep bootstrap pending so each test controls real store publications. No
   // hook/module replacements: subscription and materialization paths are real.
   const sdk = OpenCode.make({ baseUrl: 'http://telemetry.test', fetch: (request) => {
@@ -85,8 +125,93 @@ describe('mounted turn telemetry with live sync stores', () => {
 
   afterEach(async () => {
     await act(async () => root.unmount());
+    for (const cleanup of cleanups.splice(0).reverse()) cleanup();
     setSyncPerformanceDiagnosticsEnabled(false);
     dom.restore();
+  });
+
+  test('collapsed live speed updates once a second without reading or aggregating history, then fixes the completion value', async () => {
+    const clock = liveClock();
+    const delta = await beginLive();
+    const heading = () => dom.container.querySelector('button');
+    expect(heading()?.getAttribute('aria-expanded')).toBe('false');
+    tokenReads = 0;
+    resetSyncPerformanceDiagnostics();
+    for (let i = 0; i < 100; i += 1) await act(async () => delta('abcd'));
+    expect(heading()?.textContent).toBe('Turn stats');
+    await clock.tick(1000);
+    expect(heading()?.textContent).toBe('Turn statsEst. ~100 tok/s');
+    expect(dom.container.querySelector('[title]')?.getAttribute('aria-label')).toContain('Estimated text delivery');
+    expect(dom.container.textContent).not.toContain('Whole turn');
+    expect(tokenReads).toBe(0);
+    expect(getSyncPerformanceDiagnostics()?.sessionMessageChangeCallbacks).toBe(0);
+    await act(async () => delta('abcd'.repeat(200)));
+    expect(heading()?.textContent).toBe('Turn statsEst. ~100 tok/s');
+    await clock.tick(2000);
+    expect(heading()?.textContent).toBe('Turn statsEst. ~150 tok/s');
+    await clock.tick(7000);
+    expect(heading()?.textContent).toBe('Turn statsEst. ~0 tok/s');
+
+    await act(async () => store().setState({ session_status: { [sessionId]: { type: 'idle' } }, part: { [assistant.id]: [
+      { id: 'text', type: 'text', sessionID: sessionId, messageID: assistant.id, text: 'Completed', time: { start: 3000, end: 5000 } },
+    ] } }));
+    expect(heading()?.textContent).toBe('Turn stats~10 tok/s');
+    expect(dom.container.querySelector('[title]')).toBeNull();
+    expect(clock.clear.mock.calls.length).toBe(1);
+    await clock.tick(10000);
+    expect(heading()?.textContent).toBe('Turn stats~10 tok/s');
+    expect(messageRequests).toBe(0);
+  });
+
+  test('retry and hiding release live sampling, and resuming starts without old samples', async () => {
+    const clock = liveClock();
+    const delta = await beginLive();
+    await act(async () => delta('abcd'.repeat(100)));
+    await clock.tick(1000);
+    expect(dom.container.textContent).toContain('Est. ~100 tok/s');
+    await act(async () => store().setState({ session_status: { [sessionId]: { type: 'retry', attempt: 1, message: 'retry', next: 0 } } }));
+    expect(dom.container.textContent).not.toContain('Est.');
+    expect(clock.clear.mock.calls.length).toBe(1);
+    await act(async () => store().setState({ session_status: { [sessionId]: { type: 'busy' } } }));
+    await clock.tick(2000);
+    expect(dom.container.textContent).toBe('Turn stats');
+    await act(async () => delta('abcd'.repeat(20)));
+    await clock.tick(3000);
+    expect(dom.container.textContent).toContain('Est. ~20 tok/s');
+    await render(false);
+    await act(async () => delta('abcd'.repeat(1000)));
+    await render();
+    await clock.tick(4000);
+    expect(dom.container.textContent).toBe('Turn stats');
+    expect(messageRequests).toBe(0);
+  });
+
+  test('live values are isolated by session, directory and runtime, including equal IDs', async () => {
+    const clock = liveClock();
+    const delta = await beginLive();
+    await act(async () => delta('abcd'.repeat(100)));
+    await clock.tick(1000);
+    expect(dom.container.textContent).toContain('Est. ~100 tok/s');
+    await render(true, directory, 'other-session');
+    expect(dom.container.textContent).not.toContain('Est.');
+    await render();
+    await clock.tick(2000);
+    expect(dom.container.textContent).toBe('Turn stats');
+    await act(async () => delta('abcd'.repeat(100)));
+    await clock.tick(3000);
+    expect(dom.container.textContent).toContain('Est. ~100 tok/s');
+    await render(true, '/another-repo');
+    await act(async () => store('/another-repo').setState({ session_status: { [sessionId]: { type: 'busy' } } }));
+    await clock.tick(4000);
+    expect(dom.container.textContent).toBe('Turn stats');
+    await render();
+    await act(async () => delta('abcd'.repeat(20)));
+    await clock.tick(5000);
+    expect(dom.container.textContent).toContain('Est. ~20 tok/s');
+    Object.defineProperty(window, '__OPENCHAMBER_API_BASE_URL__', { value: 'https://second-runtime.test', configurable: true });
+    await render();
+    await clock.tick(6000);
+    expect(dom.container.textContent).not.toContain('Est.');
   });
 
   test('waits for authority, then shows actual token values even when idle is omitted from the snapshot', async () => {

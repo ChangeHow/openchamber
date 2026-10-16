@@ -3506,6 +3506,8 @@ export const dict: Record<I18nKey, string> = {
   'chat.workStatus.action.openSubagent': '{name} を開く',
   'chat.workStatus.section.usage': '使用量',
   'chat.workStatus.section.telemetry': 'ターンの統計',
+  'chat.workStatus.telemetry.liveSpeedValue': '推定 ~{rate} tok/s',
+  'chat.workStatus.telemetry.liveSpeedDescription': '最大5秒間のテキスト受信速度の推定値: {rate} tok/s。推論とツールの出力を除きます。ネットワークのバッファリングの影響を受けます。完了後は使用量データに基づく応答速度を表示します。',
   'chat.workStatus.telemetry.responseSpeed': '回答',
   'chat.workStatus.telemetry.responseSpeedDescription': '最終テキストが届いた速さです。開始前の待ち時間、推論、先行するツール呼び出しは含みません。テキストの時刻から求めた推定値で、プロバイダー側の速度測定ではありません。',
   'chat.workStatus.telemetry.speed': 'リクエスト全体',
