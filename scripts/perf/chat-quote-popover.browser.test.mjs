@@ -41,6 +41,8 @@ async function createQuotePopoverFixture() {
   `);
   const server = await createServer({
     configFile: false, root: fixture, logLevel: 'error',
+    // Concurrent browser suites must not invalidate each other's optimized deps.
+    cacheDir: path.join(fixture, '.vite'),
     css: { postcss: repo },
     resolve: { alias: { '@': path.join(repo, 'packages/ui/src'), '@openchamber/sdk': path.join(repo, 'packages/sdk/src/index.ts') } },
     optimizeDeps: { noDiscovery: true, include: ['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom', 'react-dom/client', 'clsx', 'tailwind-merge'] },
