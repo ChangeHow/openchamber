@@ -45,7 +45,7 @@ export async function createQuotePopoverFixture(sourceRoot = repo) {
     configFile: false, root: fixture, logLevel: 'error',
     css: { postcss: repo },
     resolve: { alias: { '@': path.join(sourceRoot, 'packages/ui/src'), '@openchamber/sdk': path.join(sourceRoot, 'packages/sdk/src/index.ts') } },
-    optimizeDeps: { noDiscovery: true, include: ['react', 'react-dom', 'react-dom/client', 'clsx', 'tailwind-merge'] },
+    optimizeDeps: { noDiscovery: true, include: ['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom', 'react-dom/client', 'clsx', 'tailwind-merge'] },
     server: { host: '127.0.0.1', port: 0, fs: { allow: [repo, sourceRoot, fixture] } },
   });
   try {
