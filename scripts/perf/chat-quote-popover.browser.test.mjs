@@ -9,9 +9,7 @@ import { CdpClient, createPageTarget, launchChrome, reservePort, resolveChrome, 
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-// Export the fixture and assertions so the same regression can run against an
-// existing browser session without launching a second browser.
-export async function createQuotePopoverFixture(sourceRoot = repo) {
+async function createQuotePopoverFixture() {
   const { createServer } = await import('vite');
   mkdirSync(path.join(repo, 'tmp'), { recursive: true });
   const fixture = mkdtempSync(path.join(repo, 'tmp/chat-quote-popover-'));
@@ -44,9 +42,9 @@ export async function createQuotePopoverFixture(sourceRoot = repo) {
   const server = await createServer({
     configFile: false, root: fixture, logLevel: 'error',
     css: { postcss: repo },
-    resolve: { alias: { '@': path.join(sourceRoot, 'packages/ui/src'), '@openchamber/sdk': path.join(sourceRoot, 'packages/sdk/src/index.ts') } },
+    resolve: { alias: { '@': path.join(repo, 'packages/ui/src'), '@openchamber/sdk': path.join(repo, 'packages/sdk/src/index.ts') } },
     optimizeDeps: { noDiscovery: true, include: ['react', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-dom', 'react-dom/client', 'clsx', 'tailwind-merge'] },
-    server: { host: '127.0.0.1', port: 0, fs: { allow: [repo, sourceRoot, fixture] } },
+    server: { host: '127.0.0.1', port: 0, fs: { allow: [repo, fixture] } },
   });
   try {
     await server.listen();
@@ -64,7 +62,7 @@ export async function createQuotePopoverFixture(sourceRoot = repo) {
   };
 }
 
-export async function assertQuotePopoverBounds(client, url) {
+async function assertQuotePopoverBounds(client, url) {
   const evaluate = async (expression) => {
     const result = await client.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
     assert.equal(result.exceptionDetails, undefined, result.exceptionDetails?.exception?.description);
@@ -121,35 +119,33 @@ export async function assertQuotePopoverBounds(client, url) {
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  let chrome;
-  try {
-    chrome = resolveChrome(process.env.OPENCHAMBER_TEST_CHROME);
-  } catch (error) {
-    if (process.env.OPENCHAMBER_TEST_CHROME) throw error;
-  }
-  test('saved quote comments stay on screen through repeated editing', {
-    skip: !chrome && 'Set OPENCHAMBER_TEST_CHROME to run the browser regression', timeout: 120_000,
-  }, async () => {
-    const fixture = await createQuotePopoverFixture();
-    let browser;
-    let client;
-    try {
-      const port = await reservePort();
-      browser = launchChrome({ chrome, port, profileDir: path.join(fixture.fixture, 'profile'), headless: true, extraArgs: ['--no-sandbox', '--disable-dev-shm-usage'] });
-      const target = await createPageTarget(port);
-      client = new CdpClient(target.webSocketDebuggerUrl);
-      await client.connect();
-      await assertQuotePopoverBounds(client, fixture.url);
-    } finally {
-      client?.close();
-      if (browser && browser.exitCode === null) {
-        const exited = once(browser, 'exit');
-        browser.kill('SIGTERM');
-        await Promise.race([exited, wait(3_000)]);
-        if (browser.exitCode === null) browser.kill('SIGKILL');
-      }
-      await fixture.close();
-    }
-  });
+let chrome;
+try {
+  chrome = resolveChrome(process.env.OPENCHAMBER_TEST_CHROME);
+} catch (error) {
+  if (process.env.OPENCHAMBER_TEST_CHROME) throw error;
 }
+test('saved quote comments stay on screen through repeated editing', {
+  skip: !chrome && 'Set OPENCHAMBER_TEST_CHROME to run the browser regression', timeout: 120_000,
+}, async () => {
+  const fixture = await createQuotePopoverFixture();
+  let browser;
+  let client;
+  try {
+    const port = await reservePort();
+    browser = launchChrome({ chrome, port, profileDir: path.join(fixture.fixture, 'profile'), headless: true, extraArgs: ['--no-sandbox', '--disable-dev-shm-usage'] });
+    const target = await createPageTarget(port);
+    client = new CdpClient(target.webSocketDebuggerUrl);
+    await client.connect();
+    await assertQuotePopoverBounds(client, fixture.url);
+  } finally {
+    client?.close();
+    if (browser && browser.exitCode === null) {
+      const exited = once(browser, 'exit');
+      browser.kill('SIGTERM');
+      await Promise.race([exited, wait(3_000)]);
+      if (browser.exitCode === null) browser.kill('SIGKILL');
+    }
+    await fixture.close();
+  }
+});
