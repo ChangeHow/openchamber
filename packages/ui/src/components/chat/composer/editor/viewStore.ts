@@ -14,11 +14,11 @@
  * the store owns the view's lifetime and must destroy it.
  */
 
-import type { EditorView } from '@codemirror/view';
+import type { ComposerEditorView } from './ComposerEditorView';
 import type { ComposerEditorProps } from './ComposerEditor';
 
 export interface ComposerEditorViewStore {
-    view: EditorView | null;
+    view: ComposerEditorView | null;
     /**
      * Where the view's extensions read their callbacks from. It lives here
      * rather than in the component so a kept-alive view keeps calling into

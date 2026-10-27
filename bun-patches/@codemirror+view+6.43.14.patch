@@ -1,0 +1,148 @@
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -5260,6 +5260,10 @@
+ function updateForFocusChange(view) {
+     setTimeout(() => {
++        // Keep a native iOS paragraph until its scheduled reconciliation.
++        // That document update also reports the current focus state.
++        if (view.observer.iosParagraphPending)
++            return;
+         let focus = view.hasFocus;
+         if (focus != view.inputState.notifiedFocused) {
+             let tr = focusChangeTransaction(view.state, focus);
+             if (tr)
+@@ -7145,6 +7149,7 @@ class DOMObserver {
+         // Set when a selection change is detected, cleared on flush
+         this.selectionChanged = false;
+         this.delayedFlush = -1;
++        this.iosParagraphPending = false;
+         this.resizeTimeout = -1;
+         this.queue = [];
+         this.delayedAndroidKey = null;
+@@ -7172,7 +7177,16 @@ class DOMObserver {
+             // reinsert the finished text. CodeMirror's handling of the
+             // deletion will prevent the reinsertion from happening,
+             // breaking composition.
+-            if ((browser.ie && browser.ie_version <= 11 || browser.ios && view.composing) &&
++            // iOS dictation can keep inserting into a native paragraph after
++            // delivering its creation. Replacing that DIV here loses later
++            // batches. Only the composer opts in; keep the upstream IME path.
++            if (browser.ios && view.constructor.IOS_PARAGRAPH_SYNC === true && !view.composing &&
++                mutations.some(m => m.type == "childList" && m.target == view.contentDOM &&
++                    Array.from(m.addedNodes).some(node => node.nodeName == "DIV"))) {
++                this.iosParagraphPending = true;
++                this.flushSoon();
++            }
++            else if ((browser.ie && browser.ie_version <= 11 || browser.ios && view.composing) &&
+                 mutations.some(m => m.type == "childList" && m.removedNodes.length ||
+                     m.type == "characterData" && m.oldValue.length > m.target.nodeValue.length))
+                 this.flushSoon();
+@@ -7447,6 +7461,7 @@ class DOMObserver {
+         return this.queue;
+     }
+     processRecords() {
++        this.iosParagraphPending = false;
+         let records = this.pendingRecords();
+         if (records.length)
+             this.queue = [];
+@@ -7857,6 +7872,13 @@
+ class EditorView {
++    // OpenChamber's explicit read/lifecycle boundary for the opted-in iOS
++    // paragraph delay. Do not force the upstream composition delay to finish.
++    flushPendingIOSParagraph() {
++        if (!this.compositionStarted && this.observer.iosParagraphPending)
++            this.observer.forceFlush();
++    }
++
+     /**
+     The current editor state.
+     */
+     get state() { return this.viewState.state; }
+     /**
+diff --git a/dist/index.cjs b/dist/index.cjs
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -5265,6 +5265,10 @@
+ function updateForFocusChange(view) {
+     setTimeout(() => {
++        // Keep a native iOS paragraph until its scheduled reconciliation.
++        // That document update also reports the current focus state.
++        if (view.observer.iosParagraphPending)
++            return;
+         let focus = view.hasFocus;
+         if (focus != view.inputState.notifiedFocused) {
+             let tr = focusChangeTransaction(view.state, focus);
+             if (tr)
+@@ -7150,6 +7154,7 @@ class DOMObserver {
+         // Set when a selection change is detected, cleared on flush
+         this.selectionChanged = false;
+         this.delayedFlush = -1;
++        this.iosParagraphPending = false;
+         this.resizeTimeout = -1;
+         this.queue = [];
+         this.delayedAndroidKey = null;
+@@ -7177,7 +7182,16 @@ class DOMObserver {
+             // reinsert the finished text. CodeMirror's handling of the
+             // deletion will prevent the reinsertion from happening,
+             // breaking composition.
+-            if ((browser.ie && browser.ie_version <= 11 || browser.ios && view.composing) &&
++            // iOS dictation can keep inserting into a native paragraph after
++            // delivering its creation. Replacing that DIV here loses later
++            // batches. Only the composer opts in; keep the upstream IME path.
++            if (browser.ios && view.constructor.IOS_PARAGRAPH_SYNC === true && !view.composing &&
++                mutations.some(m => m.type == "childList" && m.target == view.contentDOM &&
++                    Array.from(m.addedNodes).some(node => node.nodeName == "DIV"))) {
++                this.iosParagraphPending = true;
++                this.flushSoon();
++            }
++            else if ((browser.ie && browser.ie_version <= 11 || browser.ios && view.composing) &&
+                 mutations.some(m => m.type == "childList" && m.removedNodes.length ||
+                     m.type == "characterData" && m.oldValue.length > m.target.nodeValue.length))
+                 this.flushSoon();
+@@ -7452,6 +7466,7 @@ class DOMObserver {
+         return this.queue;
+     }
+     processRecords() {
++        this.iosParagraphPending = false;
+         let records = this.pendingRecords();
+         if (records.length)
+             this.queue = [];
+@@ -7862,6 +7877,13 @@
+ class EditorView {
++    // OpenChamber's explicit read/lifecycle boundary for the opted-in iOS
++    // paragraph delay. Do not force the upstream composition delay to finish.
++    flushPendingIOSParagraph() {
++        if (!this.compositionStarted && this.observer.iosParagraphPending)
++            this.observer.forceFlush();
++    }
++
+     /**
+     The current editor state.
+     */
+     get state() { return this.viewState.state; }
+     /**
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -736,6 +736,8 @@
+ transactions for editing actions.
+ */
+ declare class EditorView {
++    /** OpenChamber patch: finish only a pending opted-in iOS paragraph batch. */
++    flushPendingIOSParagraph(): void;
+     /**
+     The current editor state.
+     */
+diff --git a/dist/index.d.cts b/dist/index.d.cts
+--- a/dist/index.d.cts
++++ b/dist/index.d.cts
+@@ -736,6 +736,8 @@
+ transactions for editing actions.
+ */
+ declare class EditorView {
++    /** OpenChamber patch: finish only a pending opted-in iOS paragraph batch. */
++    flushPendingIOSParagraph(): void;
+     /**
+     The current editor state.
+     */

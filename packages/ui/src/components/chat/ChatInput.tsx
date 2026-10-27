@@ -1251,6 +1251,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     } = useComposerDraft({
         message,
         messageRef,
+        capturePendingInput: () => composerViewStore.view?.capturePendingInput(),
         setMessage,
         confirmedMentionsRef,
         identity: chatDraftIdentity,
@@ -2928,6 +2929,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
         if (shellTriggerNormalizationRef.current) {
             shellTriggerNormalizationRef.current = false;
+            messageRef.current = value;
             setMessage(value);
             return;
         }
@@ -2942,6 +2944,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             }
         }
 
+        // A synchronous editor read can flush native input immediately before
+        // pagehide. Draft persistence cannot wait for the React state effect.
+        messageRef.current = value;
         const pastedInsertedText = fromPaste ? insertedText : '';
         const isPasteInput = pastedInsertedText.includes('@') || suppressNextFileMentionPasteRef.current;
         if (suppressNextFileMentionPasteRef.current) {
@@ -2963,6 +2968,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 shellTriggerNormalizationRef.current = true;
                 editor.replaceRange(0, 1, '', nextCursor);
             } else {
+                messageRef.current = shellCommand;
                 setMessage(shellCommand);
             }
             return;

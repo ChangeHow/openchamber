@@ -44,6 +44,8 @@ export interface ComposerDraftOptions {
     message: string;
     /** Latest text without waiting for a render, for flush-on-unload paths. */
     messageRef: React.RefObject<string>;
+    /** Return only newly reconciled native input, without editor interaction callbacks. */
+    capturePendingInput?: () => string | undefined;
     setMessage: (text: string) => void;
     /**
      * Mention paths the user confirmed through the picker. Mutated here:
@@ -91,6 +93,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
     const {
         message,
         messageRef,
+        capturePendingInput,
         setMessage,
         confirmedMentionsRef,
         identity,
@@ -125,8 +128,8 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
 
     // Callbacks reach the effects through a ref so a caller passing inline
     // functions does not re-run the persistence effects on every render.
-    const callbacksRef = React.useRef({ onIdentityChange, onDraftRestored });
-    callbacksRef.current = { onIdentityChange, onDraftRestored };
+    const callbacksRef = React.useRef({ onIdentityChange, onDraftRestored, capturePendingInput });
+    callbacksRef.current = { onIdentityChange, onDraftRestored, capturePendingInput };
 
     React.useEffect(() => {
         currentIdentityRef.current = identity;
@@ -173,6 +176,17 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
     // The new-session draft id seen at the last run, so a switch can tell the
     // same draft moving from a new draft replacing it.
     const previousNewSessionDraftIdRef = React.useRef<number | null>(newSessionDraftId);
+    const outgoingNativeInputRef = React.useRef<string | undefined>(undefined);
+    React.useLayoutEffect(() => {
+        const previous = previousIdentityRef.current;
+        if ((previous ? getChatDraftIdentityKey(previous) : null) === (identity ? getChatDraftIdentityKey(identity) : null)) return;
+        // Capture before the editor's passive effects redraw for the incoming
+        // language/attachments. Its handlers may already belong to that draft.
+        const captured = callbacksRef.current.capturePendingInput?.();
+        outgoingNativeInputRef.current = captured;
+        if (captured !== undefined) messageRef.current = captured;
+    }, [identity, messageRef]);
+
     React.useEffect(() => {
         const sameNewSessionDraft = newSessionDraftId !== null && previousNewSessionDraftIdRef.current === newSessionDraftId;
         previousNewSessionDraftIdRef.current = newSessionDraftId;
@@ -181,6 +195,8 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         const currentKey = identity ? getChatDraftIdentityKey(identity) : null;
         if (previousKey === currentKey) return;
 
+        const outgoingText = outgoingNativeInputRef.current ?? messageRef.current;
+        outgoingNativeInputRef.current = undefined;
         previousIdentityRef.current = identity;
         callbacksRef.current.onIdentityChange?.();
         clearPending();
@@ -188,7 +204,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         // debounced effect must not immediately write it back out.
         skipNextPersistRef.current = true;
 
-        const outgoing = { text: messageRef.current, confirmedMentions: new Set(confirmedMentionsRef.current) };
+        const outgoing = { text: outgoingText, confirmedMentions: new Set(confirmedMentionsRef.current) };
         // Picking another project or worktree for the open new-session draft
         // changes where it will run, not which draft it is, so its text and
         // files go along instead of staying with the old directory. A new
@@ -300,6 +316,11 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
     React.useEffect(() => {
         const flush = () => {
             clearPending();
+            const captured = callbacksRef.current.capturePendingInput?.();
+            if (captured !== undefined) {
+                messageRef.current = captured;
+                setMessage(captured);
+            }
             persistNow(currentIdentityRef.current, messageRef.current);
         };
         const onVisibilityChange = () => {
@@ -315,7 +336,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
             window.removeEventListener('pagehide', flush);
             flush();
         };
-    }, [clearPending, messageRef, persistNow]);
+    }, [clearPending, messageRef, persistNow, setMessage]);
 
     const restoreDraft = React.useCallback((target: ChatDraftIdentity | null, draft: string, confirmedMentions: Set<string>) => {
         const targetKey = target ? getChatDraftIdentityKey(target) : null;

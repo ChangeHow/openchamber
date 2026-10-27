@@ -239,7 +239,7 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
         } = props;
 
         const hostRef = React.useRef<HTMLDivElement | null>(null);
-        const viewRef = React.useRef<EditorView | null>(null);
+        const viewRef = React.useRef<ComposerEditorView | null>(null);
 
         // CodeMirror defers Enter on iOS and Chrome Android, then re-dispatches
         // a synthetic keydown. Keep modifiers only for that short handoff.
@@ -287,6 +287,7 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
                 keptView.requestMeasure();
                 viewRef.current = keptView;
                 return () => {
+                    keptView.flushPendingIOSParagraph();
                     keptView.dom.remove();
                     viewRef.current = null;
                 };
@@ -304,7 +305,7 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
                 },
             }];
 
-            const view = new ComposerEditorView({
+            const view: ComposerEditorView = new ComposerEditorView({
                 state: EditorState.create({
                     doc: handlersRef.current.value,
                     extensions: [
@@ -348,6 +349,9 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
                         ),
                         composerEditorTheme,
                         EditorView.updateListener.of((update) => {
+                            // A draft boundary captures outgoing native input
+                            // after handlers may already belong to the next draft.
+                            if (view.isCapturingPendingInput) return;
                             const handlers = handlersRef.current;
                             const selection = readSelection(update.state);
 
@@ -378,7 +382,11 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
                         EditorView.domEventHandlers({
                             keyup: (event) => { handlersRef.current.onKeyUp?.(event); return false; },
                             focus: () => { handlersRef.current.onFocus?.(); return false; },
-                            blur: () => { handlersRef.current.onBlur?.(); return false; },
+                            blur: (_event, view) => {
+                                view.flushPendingIOSParagraph();
+                                handlersRef.current.onBlur?.();
+                                return false;
+                            },
                             paste: (event) => { handlersRef.current.onPaste?.(event); return false; },
                         }),
                         EditorView.contentAttributes.of({
@@ -417,6 +425,7 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
 
             return () => {
                 clearDeferredEnterModifiers();
+                view.flushPendingIOSParagraph();
                 viewRef.current = null;
                 // A stored view is detached, not destroyed: the store owns its
                 // lifetime now, and whoever owns the store ends it.
@@ -599,13 +608,17 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
                 view.contentDOM.focus({ preventScroll: options?.preventScroll });
             },
             blur() {
-                viewRef.current?.contentDOM.blur();
+                const view = viewRef.current;
+                view?.flushPendingIOSParagraph();
+                view?.contentDOM.blur();
             },
             isFocused() {
                 return viewRef.current?.hasFocus ?? false;
             },
             getValue() {
-                return viewRef.current?.state.doc.toString() ?? '';
+                const view = viewRef.current;
+                view?.flushPendingIOSParagraph();
+                return view?.state.doc.toString() ?? '';
             },
             getSelection() {
                 const view = viewRef.current;

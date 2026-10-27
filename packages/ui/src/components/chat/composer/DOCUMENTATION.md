@@ -527,6 +527,38 @@ composer holds a prompt, not a source file: it is short enough that a full pass
 is cheaper and far simpler than incremental mapping, and it keeps the editor
 and the send path reading the same grammar.
 
+### Why native iOS paragraphs wait for a frame
+
+The pinned `@codemirror/view` Bun patch defers observer reconciliation when a
+non-composing iOS `ComposerEditorView` receives a new direct-child `DIV`.
+An iOS dictation keyboard can still be inserting into that native line after
+delivering its creation; immediate reconciliation replaces the node and loses
+the following text batches. The patch uses CodeMirror's existing `flushSoon`
+queue and frame cleanup. Android, desktop and generic editors keep their
+upstream observer behavior, as does the existing IME composition delay.
+
+CodeMirror's focus notification timer skips its update while this paragraph
+batch is pending. The ensuing document update observes the current focus, so
+a focus-only redraw cannot discard native input before the scheduled frame.
+
+While this paragraph batch is pending, the DOM leads the document. Composer
+`getValue`, blur, detach and destroy flush that batch before reading text or
+releasing its callbacks. The patched `flushPendingIOSParagraph` method only
+finishes an opted-in paragraph delay outside a composition; it does not force
+ordinary composing input to finish. Keep the ESM, CommonJS and type declaration
+patches together when updating CodeMirror.
+
+Draft persistence uses `ComposerEditorView.capturePendingInput` to reconcile
+that batch without editor change or selection callbacks. On an identity switch,
+the hook captures in layout before the editor's incoming language and attachment
+effects can redraw its DOM, then consumes the snapshot for the outgoing identity
+in the existing draft-switch effect. Pagehide, hidden, freeze and cleanup capture
+before persisting. A capture returns text only when this patch reconciles a new
+native batch; otherwise persistence keeps `messageRef`, so an app-cleared draft
+cannot be resurrected from an older editor document. Ordinary editor callbacks
+update that ref synchronously, including when `getValue` flushes just before
+pagehide, because a React state effect runs too late for a same-tick write.
+
 ## Ordering rules worth knowing
 
 - `editor/ComposerEditor.tsx` forwards a click on the composer's padding by
