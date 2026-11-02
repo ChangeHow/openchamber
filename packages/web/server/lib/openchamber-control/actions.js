@@ -162,11 +162,12 @@ export const OPENCHAMBER_IMAGE_ACTIONS = Object.freeze(
 
 /**
  * Asking for a secret is its own tool: it is the one action that takes a
- * credential from the user, so it can be switched off alone. The value goes
- * to a private file and only its path reaches the agent.
+ * credential from the user, so it can be switched off alone. File mode returns
+ * a path; execution mode returns only redacted process output.
  */
 export const OPENCHAMBER_SECRET_ACTION_DEFINITIONS = Object.freeze([
-  { action: 'secret.request', title: 'Ask for a secret', description: 'Requires label and reason' },
+  { action: 'secret.request', title: 'Ask for a secret', description: 'Requires label and reason; saves a private file for 24 hours' },
+  { action: 'secret.run', title: 'Run with private inputs', description: 'Requires program and inputs; authorize execution, collect all private values, then run once in memory' },
 ]);
 
 export const OPENCHAMBER_SECRET_ACTIONS = Object.freeze(

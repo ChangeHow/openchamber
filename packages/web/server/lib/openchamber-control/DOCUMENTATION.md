@@ -93,8 +93,9 @@ other.
   against `budgetMB` when the budget cut it) and a note telling the agent to
   split the page or use smaller images. A page whose images all show answers
   as before.
-- `secret-request.js` runs `secret.request` for the `openchamber_secret`
-  agent tool. The call waits in its own `createPageAnswers` instance, so the
+- `secret-request.js` owns file requests and in-memory execution handoff for
+  the `openchamber_secret` agent tool. `secret.request` retains its file contract.
+  The call waits in its own `createPageAnswers` instance, so the
   session shows as waiting for the user exactly like a page (pending list,
   `openchamber:page-waiting` with the label as title, "Input needed"), while
   a page's answer route can never reach a secret's wait. The chat answers
@@ -112,6 +113,37 @@ other.
   card says the agent's commands can read it. `createSecretFiles().sweep()`
   deletes files 24 hours after they were written, on server start and
   hourly. Answers `403` while `agentSecretToolEnabled` is `false`.
+- `secret.run` accepts an absolute `program`, public `args` and `env`, 1 to 8
+  unique private environment bindings with short labels, an optional `workdir`
+  and `timeoutMs`. Only the authenticated managed-plugin adapter may enter it;
+  the generic control route cannot grant execution permission. The plugin
+  asserts `external_directory` when needed, then `shell`, before enabling the
+  card. The canonical working directory and public command approved there are
+  the ones executed here.
+  The answer route receives all `values` together. Missing, empty, NUL-containing
+  or unknown fields release nothing. A separate in-memory entry keyed by session
+  and call holds the values until the runner consumes them; page answers and
+  wait events carry only a submission marker. Decline or abort before submission
+  starts no process; stale answers are refused. Entries are dropped on
+  submission, decline or call cleanup;
+  no execution answer enters `createSecretFiles`.
+- `secret-execution.js` owns input normalization and the POSIX process runner.
+  The server spawns once, as its own user, with `shell: false`, a detached
+  process group, a small inherited environment allowlist and explicit public
+  and private bindings. It never changes the parent's environment. The timer
+  starts at spawn, defaults to 120000 ms and is capped at 600000 ms. Output is
+  buffered in memory and redacted with longest-first complete literal matching
+  before returning `{ status, exitCode, stdout, stderr }`. Over 1 MiB combined
+  output kills the group and discards all output, including secret prefixes.
+  Cancellation, timeout and leader exit kill the group and clean listeners.
+  macOS and Linux are supported; Windows execution mode is refused before
+  collecting inputs because process-group termination requires POSIX.
+  This is trusted local execution, inside the enterprise boundary like terminal
+  and exec, with no new listener or app-owned egress. The consumer and its
+  descendants can access the values and perform external effects. Cancellation
+  cannot undo those effects or guarantee remote jobs stop. Encoded, transformed
+  or deliberately fragmented secrets are outside literal redaction. JavaScript
+  cannot guarantee memory zeroing. Remote clients need authenticated HTTPS.
 - `routes.js` is the authenticated CLI HTTP adapter. It forwards one action,
   preserves service status and partial-result details, and propagates request
   cancellation. It also carries the chat's answer to a waiting page.
@@ -377,3 +409,11 @@ them, where it says who sent which message.
 The existing `openchamber:chats` id lets agents choose from `projects.list`
 without changing the current-directory default or treating a reserved word as
 a filesystem path. Chats remains outside the registered project list on disk.
+
+### Why execution inputs have an in-memory handoff
+
+The existing file mode deliberately retains a credential for 24 hours. A
+single-run execution needs no reusable credential, so its answer is consumed
+in memory and never travels through file storage, tool metadata or OpenCode's
+transcript. Only public bindings and the redacted process result cross the
+tool callback.

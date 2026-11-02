@@ -248,7 +248,7 @@ export const WORKFLOW_GUIDANCE = 'The openchamber_workflow tool runs a script th
  * the transcript.
  */
 export const SECRET_REQUEST_GUIDANCE = "The openchamber_secret tool asks the user for a secret (API key, token, password) on a private card in the chat."
-  + " Whenever you need one, call it: never ask for a secret in the chat or tell the user to paste one there.";
+  + " Whenever you need one, call it: never ask for a secret in the chat or tell the user to paste one there. Use secret.run for one authorized program with private environment inputs in memory; secret.request retains the private-file mode.";
 
 const buildGuidance = ({ linking, rendering, secrets, workflows, directTools }) => [
   linking ? SESSION_LINK_GUIDANCE : '',
