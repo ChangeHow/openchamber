@@ -293,10 +293,10 @@ export const createOpenChamberControlService = (dependencies) => {
     isRenderToolEnabled = async () => true,
     isSecretToolEnabled = async () => true,
     // Where `secret.request` writes what the user saves
-    // (`createSecretFiles`); absent means the server cannot take secrets.
+    // (`createSecretFiles`); absent disables file mode only.
     secretFiles = null,
     // Hears when a page an agent shows starts and stops waiting for the
-    // user's answer (render.page with awaitAnswer, and secret.request).
+    // user's answer (render.page with awaitAnswer, secret.request and secret.run).
     onPageWaitChange = () => {},
     // The requests each session waits on the user to answer, by session id
     // (`getPendingBlockingRequestsSnapshot`); an entry exists only while one is open.
@@ -1100,6 +1100,17 @@ export const createOpenChamberControlService = (dependencies) => {
       if (action === 'usage.read') {
         if (!readUsage) throw new OpenChamberControlError('Usage is not available on this server', 503);
         return await readUsage(input, { signal: options.signal });
+      }
+      if (action === 'secret.run') {
+        // Only the managed plugin can assert OpenCode execution permissions.
+        // The generic control/CLI route cannot authorize this action.
+        if (options.secretExecutionAuthorized !== true) throw new OpenChamberControlError('Private-input execution requires the managed secret tool permission checks', 403);
+        return await secretRequests.run(input, {
+          sessionId: asNonEmptyString(options.contextSessionId),
+          callId: asNonEmptyString(options.contextCallId),
+          directory: asNonEmptyString(contextDirectory),
+          signal: options.signal,
+        });
       }
       if (action === 'secret.request') {
         return await secretRequests.request(input, {

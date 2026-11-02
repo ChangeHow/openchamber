@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { isString } from '../shared/guards.js';
+import { isRecord, isString } from '../shared/guards.js';
 import { OpenChamberControlError } from './error.js';
 import { createPageAnswers } from './render-page.js';
+import { normalizeSecretExecution, runSecret, validateSecretValues } from './secret-execution.js';
 
 export const SECRET_REQUEST_MAX_LABEL_LENGTH = 120;
 export const SECRET_REQUEST_MAX_REASON_LENGTH = 1000;
@@ -77,6 +78,39 @@ export const createSecretFiles = ({ directory, now = Date.now, fsPromises = fs }
  */
 export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnreadChat = async () => false }) => {
   const waits = createPageAnswers({ onWaitChange });
+  // Only execution waits have an entry here. Values never enter page answers,
+  // wait events, tool results or files.
+  const executions = new Map();
+  const keyFor = (sessionId, callId) => `${sessionId}\0${callId}`;
+
+  const run = async (input, { sessionId, callId, directory, signal = new AbortController().signal } = {}) => {
+    if (!await isEnabled()) throw new OpenChamberControlError('The secret tool is turned off in OpenChamber settings', 403);
+    if (process.platform === 'win32') throw new OpenChamberControlError('Private-input execution requires macOS or Linux', 501);
+    if (!sessionId || !callId || !directory) throw new OpenChamberControlError('Execution requires a calling session, call id and directory', 400);
+    let execution;
+    try {
+      execution = normalizeSecretExecution(input, directory, { ...path, isString, isRecord });
+    } catch {
+      throw new OpenChamberControlError('Invalid program, arguments, input bindings, environment, working directory, or timeout', 400);
+    }
+    if (await hasUnreadChat(sessionId)) return { status: 'cancelled', exitCode: null, stdout: '', stderr: '' };
+    const key = keyFor(sessionId, callId);
+    if (executions.has(key)) throw new OpenChamberControlError('This call already waits for private inputs', 409);
+    const entry = { execution, values: null };
+    executions.set(key, entry);
+    try {
+      const answer = await waits.wait({ sessionId, callId, title: execution.inputs[0].label, directory, signal });
+      if (answer.summary !== 'submitted' || signal.aborted) return { status: 'cancelled', exitCode: null, stdout: '', stderr: '' };
+      return await runSecret(execution, entry.values, signal);
+    } catch {
+      if (signal.aborted) return { status: 'cancelled', exitCode: null, stdout: '', stderr: '' };
+      // Never forward an exception that could contain private process state.
+      throw new OpenChamberControlError('Private-input execution failed. Sensitive error details were omitted.', 500);
+    } finally {
+      executions.delete(key);
+      entry.values = null;
+    }
+  };
 
   const request = async (input, { sessionId, callId, directory, signal } = {}) => {
     if (!await isEnabled()) {
@@ -143,6 +177,27 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
     if (!sessionId || !callId) {
       throw new OpenChamberControlError('sessionId and callId are required', 400);
     }
+    const key = keyFor(sessionId, callId);
+    const execution = executions.get(key);
+    if (execution) {
+      if (input.declined === true) {
+        settle(sessionId, callId, 'declined', null);
+        executions.delete(key);
+        return { status: 'declined' };
+      }
+      let values;
+      try {
+        values = validateSecretValues(execution.execution, input.values);
+      } catch {
+        throw new OpenChamberControlError('Supply every private input together, without empty values or NUL characters, at most 16000 characters each', 400);
+      }
+      settle(sessionId, callId, 'submitted', null);
+      execution.values = values;
+      executions.delete(key);
+      return { status: 'submitted' };
+    }
+    // A stale execution answer must never fall through to file mode.
+    if (input.values !== undefined) throw new OpenChamberControlError(NOT_WAITING_MESSAGE, 404);
     if (input.declined === true) {
       settle(sessionId, callId, 'declined', null);
       return { status: 'declined' };
@@ -167,5 +222,5 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
     return { status: 'saved' };
   };
 
-  return { request, answer, release: waits.release };
+  return { request, run, answer, release: waits.release };
 };

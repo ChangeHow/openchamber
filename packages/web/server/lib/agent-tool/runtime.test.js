@@ -7,6 +7,8 @@ import express from 'express';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { registerOpenChamberControlRoutes } from '../openchamber-control/routes.js';
+import { requestedSecret } from '../../../../ui/src/lib/opencode/tools.ts';
 import { createAgentToolRuntime } from './runtime.js';
 import { createOpenChamberControlService } from '../openchamber-control/service.js';
 import { createProjectContextRuntime } from '../project-context/runtime.js';
@@ -47,11 +49,12 @@ const prepareManagedEnv = async (runtime, options) => {
 // `hooks` collects the session hooks the plugin registers, by name, and
 // `removed` the ids of OpenCode's own tools it takes away, `namespaces` the
 // namespaces it registers.
-const loadTools = async (dataDir, tag, hooks = {}, removed = [], namespaces = []) => {
+const loadTools = async (dataDir, tag, hooks = {}, removed = [], namespaces = [], extra = {}) => {
   const entrypoint = path.join(pluginDirectoryFor(dataDir), 'index.js');
   const pluginModule = await import(`${pathToFileURL(entrypoint).href}?${tag}=${Date.now()}`);
   const registered = {};
   await pluginModule.default.setup({
+    ...extra,
     tool: {
       transform: (edit) => {
         edit({
@@ -727,11 +730,123 @@ describe('managed agent tool runtime', () => {
     const tools = await loadTools(dataDir, 'secret', hooks);
 
     expect(Object.keys(tools)).toEqual(['openchamber_secret']);
-    expect(Object.keys(tools.openchamber_secret.input.properties.parameters.properties).sort()).toEqual(['label', 'placeholder', 'reason']);
+    expect(Object.keys(tools.openchamber_secret.input.properties.parameters.properties).sort()).toEqual(['args', 'env', 'inputs', 'label', 'placeholder', 'program', 'reason', 'timeoutMs', 'workdir']);
     expect(tools.openchamber_secret.options).toEqual({ codemode: false });
     expect(tools.openchamber_secret.description.length).toBeLessThanOrEqual(2048);
     // A chat message ends the wait, like a page's.
     expect(hooks.prompt).toBeInstanceOf(Function);
+  });
+
+  it.skipIf(process.platform === 'win32')('authorizes the canonical external directory then the fully quoted command before exposing the execution card', async () => {
+    const { runtime, dataDir } = await createRuntime();
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'secret-permission-'));
+    temporaryDirectories.push(outside);
+    await prepareManagedEnv(runtime, { includeControl: false, includeWeb: false, includeMemory: false, includeSecret: true });
+    const order = [];
+    let denied;
+    const assert = vi.fn(async ({ action }) => { order.push(action); if (action === denied) throw new Error('Permission denied'); });
+    const tools = await loadTools(dataDir, 'secret-permission', {}, [], [], { permission: { assert }, location: { directory: dataDir } });
+    const input = { action: 'secret.run', parameters: { program: '/bin/echo', args: ["public's argument"], env: { PUBLIC: 'a b' }, workdir: outside, inputs: [{ env: 'PASSWORD', label: 'Password' }] } };
+    const progress = vi.fn(async (metadata) => { if (metadata.openchamber_secret.secretExecution) order.push('card'); });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      order.push('callback');
+      return new Response(JSON.stringify({ schemaVersion: 1, ok: true, action: 'secret.run', data: { status: 'cancelled', exitCode: null, stdout: '', stderr: '' } }));
+    });
+    vi.stubEnv('OPENCHAMBER_AGENT_TOOL_URL', 'http://localhost:3901/api/openchamber/agent-tool');
+    vi.stubEnv('OPENCHAMBER_AGENT_TOOL_TOKEN', 'synthetic-callback-token');
+    try {
+      const context = { sessionID: 'ses_permission', id: 'call_1', messageID: 'msg_1', agent: 'build', signal: new AbortController().signal, progress };
+      await tools.openchamber_secret.execute(input, context);
+      expect(order).toEqual(['external_directory', 'shell', 'card', 'callback']);
+      const workdir = await fs.realpath(outside);
+      expect(assert.mock.calls[1][0]).toMatchObject({ action: 'shell', resources: [`cd '${workdir}' && env 'PUBLIC=a b' '/bin/echo' 'public'\\''s argument'`], source: { type: 'tool', messageID: 'msg_1', id: 'call_1' } });
+      for (denied of ['external_directory', 'shell']) {
+        order.length = 0;
+        const result = await tools.openchamber_secret.execute(input, context);
+        expect(JSON.parse(result.content).ok).toBe(false);
+        expect(order).toEqual(denied === 'shell' ? ['external_directory', 'shell'] : ['external_directory']);
+      }
+      const noPermissions = await loadTools(dataDir, 'secret-no-permission');
+      order.length = 0;
+      const refused = await noPermissions.openchamber_secret.execute(input, context);
+      expect(JSON.parse(refused.content).ok).toBe(false);
+      expect(order).toEqual([]);
+    } finally {
+      fetch.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('runs the generated execution tool through the authenticated callback and card answer route without leaking inputs', async () => {
+    let ready;
+    const waiting = new Promise((resolve) => { ready = resolve; });
+    const changes = [];
+    const service = createOpenChamberControlService({
+      sessionService: { resolveDirectory: async () => process.cwd() },
+      onPageWaitChange: (change) => { changes.push(change); if (change.type === 'waiting') ready(); },
+    });
+    const { runtime, dataDir } = await createRuntime({ resolveSessionDirectory: async () => process.cwd(), executeAction: (...args) => service.execute(...args) });
+    const prepared = await prepareManagedEnv(runtime, { includeControl: false, includeWeb: false, includeMemory: false, includeSecret: true });
+    const assert = vi.fn(async () => {});
+    const tools = await loadTools(dataDir, 'secret-live', {}, [], [], { permission: { assert }, location: { directory: process.cwd() } });
+    const app = express();
+    runtime.registerRoutes(app, express);
+    registerOpenChamberControlRoutes(app, { controlService: service });
+    const server = await new Promise((resolve) => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)); });
+    vi.stubEnv('OPENCHAMBER_AGENT_TOOL_URL', `http://127.0.0.1:${server.address().port}/api/openchamber/agent-tool`);
+    vi.stubEnv('OPENCHAMBER_AGENT_TOOL_TOKEN', prepared.OPENCHAMBER_AGENT_TOOL_TOKEN);
+    const progress = vi.fn(async () => {});
+    const logs = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const pending = tools.openchamber_secret.execute({ action: 'secret.run', parameters: {
+        program: process.execPath, args: ['-e', 'process.stdout.write(process.env.PASSWORD); process.stderr.write(process.env.OTP)'],
+        inputs: [{ env: 'PASSWORD', label: 'Password' }, { env: 'OTP', label: 'Code' }],
+      } }, { sessionID: 'ses_execution', id: 'call_execution', signal: new AbortController().signal, progress });
+      await Promise.race([waiting, pending.then((result) => { throw new Error(result.content); })]);
+      expect(requestedSecret('openchamber_secret', { status: 'running', input: { action: 'secret.run', inputs: [{ env: 'PASSWORD', label: 'Password' }, { env: 'OTP', label: 'Code' }] }, metadata: progress.mock.lastCall[0], time: { start: 1 } })).toMatchObject({ state: 'waiting' });
+      const values = { PASSWORD: 'synthetic-private-password', OTP: 'synthetic-private-code' };
+      const answer = await request(server).post('/api/openchamber/secret/answer').send({ sessionId: 'ses_execution', callId: 'call_execution', values }).expect(200);
+      expect(answer.body).toEqual({ status: 'submitted' });
+      const result = await pending;
+      expect(assert.mock.calls.map(([permission]) => permission.action)).toEqual(['shell']);
+      expect(JSON.parse(result.content)).toMatchObject({ ok: true, data: { status: 'completed', exitCode: 0, stdout: '[REDACTED]', stderr: '[REDACTED]' } });
+      expect(result.metadata.openchamber).not.toHaveProperty('answer');
+      for (const value of Object.values(values)) expect(JSON.stringify({ result, progress: progress.mock.calls, changes, logs: logs.mock.calls })).not.toContain(value);
+      await request(server).post('/api/openchamber/control').send({ action: 'secret.run', input: {} }).expect(403);
+    } finally {
+      logs.mockRestore();
+      vi.unstubAllEnvs();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it.skipIf(process.platform === 'win32').each(['chat', 'stop'])('reports %s cancellation without claiming private inputs were never supplied', async (reason) => {
+    const { runtime, dataDir } = await createRuntime();
+    await prepareManagedEnv(runtime, { includeControl: false, includeWeb: false, includeMemory: false, includeSecret: true });
+    const hooks = {};
+    const tools = await loadTools(dataDir, `secret-cancel-${reason}`, hooks, [], [], { permission: { assert: async () => {} }, location: { directory: dataDir } });
+    let ready;
+    const started = new Promise((resolve) => { ready = resolve; });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation((_url, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('Aborted')), { once: true });
+      ready();
+    }));
+    vi.stubEnv('OPENCHAMBER_AGENT_TOOL_URL', 'http://localhost:3901/api/openchamber/agent-tool');
+    vi.stubEnv('OPENCHAMBER_AGENT_TOOL_TOKEN', 'synthetic-callback-token');
+    const controller = new AbortController();
+    try {
+      const pending = tools.openchamber_secret.execute({ action: 'secret.run', program: process.execPath, inputs: [{ env: 'PASSWORD', label: 'Password' }] }, { sessionID: 'ses_cancel', id: 'call_cancel', signal: controller.signal, progress: async () => {} });
+      await started;
+      if (reason === 'chat') await hooks.prompt({ sessionID: 'ses_cancel' });
+      else controller.abort();
+      const result = await pending;
+      expect(JSON.parse(result.content).data).toEqual({ status: 'cancelled', exitCode: null, stdout: '', stderr: '' });
+      expect(result.metadata.openchamber).not.toHaveProperty('answer');
+    } finally {
+      controller.abort();
+      fetch.mockRestore();
+      vi.unstubAllEnvs();
+    }
   });
 
   it('takes away the OpenCode tools the control tool replaces, and only while it is on', async () => {

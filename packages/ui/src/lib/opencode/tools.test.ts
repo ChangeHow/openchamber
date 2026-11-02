@@ -377,6 +377,17 @@ describe("requestedSecret", () => {
     expect(requestedSecret("openchamber_render", running(input))).toBeNull()
   })
 
+  test("collects execution bindings only after permission assertions and leaves the final result visible", () => {
+    const inputs = [{ env: "PASSWORD", label: "Password" }, { env: "OTP", label: "Code" }]
+    const input = { action: "secret.run", parameters: { program: "/usr/bin/example", inputs } }
+    expect(requestedSecret("openchamber_secret", running(input))).toBeNull()
+    const authorized: ToolState = { status: "running", input, time: { start: 1 }, metadata: { openchamber_secret: { secretExecution: true } } }
+    expect(requestedSecret("openchamber_secret", authorized)).toMatchObject({ inputs, state: "waiting" })
+    expect(requestedSecret("openchamber_secret", { ...authorized, input: { action: "run", inputs } })).toMatchObject({ inputs, state: "waiting" })
+    expect(requestedSecret("openchamber_secret", { ...authorized, input: { action: "secret.run", inputs: [inputs[0], inputs[0]] } })).toBeNull()
+    expect(requestedSecret("openchamber_secret", completed(input, { openchamber: { ok: true } }))).toBeNull()
+  })
+
   test("is shown in place and always counts as waiting for the user", () => {
     expect(isShownInPlace("openchamber_secret", running(input))).toBe(true)
     expect(openChamberToolCall("openchamber_secret", input)?.awaitsAnswer).toBe(true)

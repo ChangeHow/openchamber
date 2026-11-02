@@ -45,9 +45,9 @@ export const registerOpenChamberControlRoutes = (app, { controlService }) => {
     }
   });
 
-  // The user saved or declined a secret an agent asked for (secret.request).
+  // The user submitted or declined private inputs for secret.request or secret.run.
   // The body carries the secret: it is never logged or echoed back.
-  app.post('/api/openchamber/secret/answer', express.json({ limit: '64kb' }), async (req, res) => {
+  app.post('/api/openchamber/secret/answer', express.json({ limit: '1mb' }), async (req, res) => {
     try {
       return res.json(await controlService.answerSecret(req.body ?? {}));
     } catch (error) {

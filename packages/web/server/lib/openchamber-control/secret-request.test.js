@@ -138,3 +138,50 @@ describe('secret files', () => {
     await expect(fs.access(fresh)).rejects.toBeTruthy();
   });
 });
+
+describe.skipIf(process.platform === 'win32')('secret.run handoff', () => {
+  const input = {
+    program: process.execPath,
+    args: ['-e', 'process.stdout.write(process.env.PASSWORD + ":" + process.env.OTP)'],
+    inputs: [{ env: 'PASSWORD', label: 'Password' }, { env: 'OTP', label: 'Code' }],
+  };
+  const values = { PASSWORD: 'synthetic-password', OTP: 'synthetic-code' };
+  const setup = () => {
+    let started;
+    const waiting = new Promise((resolve) => { started = resolve; });
+    const files = { write: vi.fn(), remove: vi.fn() };
+    const changes = [];
+    const requests = createSecretRequests({ isEnabled: async () => true, files, onWaitChange: (change) => { changes.push(change); if (change.type === 'waiting') started(); } });
+    return { requests, waiting, files, changes };
+  };
+
+  it('releases all inputs once in memory and never sends them to files, events or results', async () => {
+    const { requests, waiting, files, changes } = setup();
+    const pending = requests.run(input, { ...call, directory: process.cwd() });
+    await waiting;
+    await expect(requests.answer({ ...call, values: { PASSWORD: values.PASSWORD } })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(requests.answer({ ...call, value: values.PASSWORD })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(requests.answer({ ...call, values: { ...values, OTP: '' } })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(requests.answer({ ...call, values })).resolves.toEqual({ status: 'submitted' });
+    await expect(requests.answer({ ...call, values })).rejects.toMatchObject({ statusCode: 404 });
+    const result = await pending;
+    expect(result).toEqual({ status: 'completed', exitCode: 0, stdout: '[REDACTED]:[REDACTED]', stderr: '' });
+    expect(files.write).not.toHaveBeenCalled();
+    for (const value of Object.values(values)) expect(JSON.stringify({ changes, result })).not.toContain(value);
+  });
+
+  it('declines or aborts without starting a process or accepting late inputs', async () => {
+    for (const decline of [true, false]) {
+      const { requests, waiting, files } = setup();
+      const controller = new AbortController();
+      const pending = requests.run(input, { ...call, directory: process.cwd(), signal: controller.signal });
+      await waiting;
+      // A filled partial client state has never left the client.
+      if (decline) await requests.answer({ ...call, declined: true });
+      else controller.abort();
+      expect(await pending).toEqual({ status: 'cancelled', exitCode: null, stdout: '', stderr: '' });
+      await expect(requests.answer({ ...call, values })).rejects.toMatchObject({ statusCode: 404 });
+      expect(files.write).not.toHaveBeenCalled();
+    }
+  });
+});
