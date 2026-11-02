@@ -93,6 +93,10 @@ the user can want independently:
   the public command, resolves the working directory with `realpath`, asserts
   `external_directory` if outside the location and then `shell` on a fully
   quoted `cd ... && env ... program args` display. No implicit shell runs.
+  The quoting cannot be broken out of, but the display can still mislead:
+  bidirectional control characters (U+202E and friends) in an argument or
+  public env value render reordered in the approval prompt, the same caveat
+  as OpenCode's own shell permission.
   A missing `ctx.permission.assert` refuses execution mode. Only after approval
   does the normalized request reach the server, with the same wait and
   cancellation machinery. The callback uses private NDJSON progress frames for

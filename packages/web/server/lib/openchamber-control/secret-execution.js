@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process";
 import { isRecord, isString } from "../shared/guards.js";
 const OUTPUT_LIMIT = 1024 * 1024;
+// After the leader is killed or exits, a descendant that left the process
+// group (setsid and friends) can hold the pipes open forever, so `close`
+// would never fire. Settle after this grace period instead.
+const FORCE_SETTLE_MS = 250;
 const INHERITED_ENV = [
   "PATH",
   "HOME",
@@ -74,7 +78,7 @@ export function validateSecretValues(request, secrets) {
   const entries = Object.entries(secrets);
   const keys = new Set(request.inputs.map((item) => item.env));
   if (entries.length !== keys.size || entries.some(([key, value]) =>
-    !keys.has(key) || !isString(value) || !value || value.includes("\0") || value.length > 16_000,
+    !keys.has(key) || !isString(value) || !value.trim() || value.includes("\0") || value.length > 16_000,
   )) throw new Error("All private inputs must be supplied together, without empty values or NUL characters, at most 16000 characters each.");
   return Object.fromEntries(entries);
 }
@@ -94,12 +98,15 @@ export async function runSecret(request, secrets, signal) {
     let stderr = [];
     let bytes = 0;
     let timer;
+    let forceTimer;
+    let exitedWith;
     let settled = false;
     const finish = (exitCode, spawnFailed = false) => {
       if (settled)
         return;
       settled = true;
       clearTimeout(timer);
+      clearTimeout(forceTimer);
       signal.removeEventListener("abort", cancel);
       const result = {
         status: status ?? (spawnFailed || exitCode !== 0 ? "failed" : "completed"),
@@ -133,9 +140,18 @@ export async function runSecret(request, secrets, signal) {
         // The group may already have exited.
       }
     }
+    function armForceSettle() {
+      clearTimeout(forceTimer);
+      forceTimer = setTimeout(() => {
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        finish(exitedWith ?? null);
+      }, FORCE_SETTLE_MS);
+    }
     function stop(reason) {
       status ??= reason;
       killGroup();
+      armForceSettle();
     }
     function cancel() {
       stop("cancelled");
@@ -150,6 +166,7 @@ export async function runSecret(request, secrets, signal) {
         stderr = [];
         status = "output_limit";
         killGroup();
+        armForceSettle();
         return;
       }
       (target === "stdout" ? stdout : stderr).push(chunk);
@@ -160,8 +177,13 @@ export async function runSecret(request, secrets, signal) {
       killGroup();
       finish(null, true);
     });
-    // Reap descendants that inherited pipes even after a normal leader exit.
-    child.once("exit", killGroup);
+    // Reap descendants that inherited pipes even after a normal leader exit,
+    // and settle even when one of them escaped the process group.
+    child.once("exit", (code) => {
+      exitedWith = code;
+      killGroup();
+      armForceSettle();
+    });
     child.once("close", (code) => finish(code));
     signal.addEventListener("abort", cancel, { once: true });
     timer = setTimeout(() => stop("timeout"), request.timeoutMs);

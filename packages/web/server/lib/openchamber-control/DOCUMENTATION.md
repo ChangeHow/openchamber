@@ -195,6 +195,9 @@ other.
   before returning `{ status, exitCode, stdout, stderr }`. Over 1 MiB combined
   output kills the group and discards all output, including secret prefixes.
   Cancellation, timeout and leader exit kill the group and clean listeners.
+  A descendant that left the process group (`setsid` and friends) can keep
+  the pipes open, so a short grace period after the kill force-settles the
+  run and destroys the streams; the call never hangs on it.
   macOS and Linux are supported; Windows execution mode is refused before
   collecting inputs because process-group termination requires POSIX.
   This is trusted local execution, inside the enterprise boundary like terminal
