@@ -273,6 +273,17 @@ describe('createParsedStatus', () => {
             expect(english(statusOf([call('openchamber_render', input)]).status)).toBe('waiting for your answer');
         });
 
+        test('a leased execution or revocation never claims it is waiting for private input', () => {
+            const execution = (inputs: Metadata[]): Part => ({
+                id: 'secret', sessionID: 'ses_1', messageID: 'msg_1', type: 'tool', callID: 'call_secret', tool: 'openchamber_secret',
+                state: { status: 'running', input: { action: 'secret.run' }, time: { start: 1 },
+                    metadata: { openchamber_secret: { secretExecution: true, secretInputs: inputs } } },
+            });
+            expect(statusOf([execution([])]).status.key).not.toBe('chat.agentStatus.waitingAnswer');
+            expect(statusOf([execution([{ env: 'OTP', label: 'Code' }])]).status.key).toBe('chat.agentStatus.waitingAnswer');
+            expect(statusOf([call('openchamber_secret', { action: 'secrets.revoke' })]).status.key).not.toBe('chat.agentStatus.waitingAnswer');
+        });
+
         test('read the same from inside a Code Mode script', () => {
             expect(english(statusOf([script([
                 { tool: 'openchamber_web', status: 'completed', input: { action: 'browser.open' } },

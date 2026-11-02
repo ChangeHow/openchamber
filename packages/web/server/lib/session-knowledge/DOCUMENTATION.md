@@ -196,7 +196,11 @@ OpenChamber launched OpenCode, read through `isSecretRequestAvailable`) is told
 to ask for any secret on the tool's card and never in the chat
 (`SECRET_REQUEST_GUIDANCE`). An agent needs the rule before it thinks of the
 tool, and a token pasted in the chat stays in the transcript. The tool
-description says only what the card does.
+description says what the card does. The guidance also names the retry path:
+reuse is for long-lived credentials only, refresh requests a fresh value, and
+`secrets.revoke` clears the calling session when the user says to forget or the
+task is done. Lifetime and storage invariants belong to
+`../openchamber-control/DOCUMENTATION.md`.
 
 ## When to offer a workflow
 

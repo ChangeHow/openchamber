@@ -1,7 +1,7 @@
 import React from 'react';
 import { z } from 'zod';
 import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
-import type { JsonValue, Message, ModelRef, Part, ReasoningPart, StructuredError, TextPart, ToolPart } from '@/lib/opencode/model';
+import type { JsonValue, Message, Metadata, ModelRef, Part, ReasoningPart, StructuredError, TextPart, ToolPart } from '@/lib/opencode/model';
 import {
     executeHasBackgroundableWork,
     isExecuteTool,
@@ -280,8 +280,9 @@ const getNamedToolStatus = (
     input: JsonValue | undefined,
     running: boolean,
     mcpServers: readonly string[],
+    metadata?: Metadata,
 ): AgentStatus | undefined => {
-    const ownCall = openChamberToolCall(toolName, input);
+    const ownCall = openChamberToolCall(toolName, input, metadata);
     if (ownCall) return getOpenChamberStatus(ownCall, running);
     const opencodeTool = opencodeNamespaceTool(toolName);
     if (opencodeTool) {
@@ -300,7 +301,7 @@ const getNamedToolStatus = (
  */
 const getRunningToolStatus = (part: ToolPart, toolName: string, count: number, mcpServers: readonly string[]): AgentStatus => {
     const state = part.state;
-    const named = getNamedToolStatus(toolName, state?.input, state?.status === 'running', mcpServers);
+    const named = getNamedToolStatus(toolName, state?.input, state?.status === 'running', mcpServers, 'metadata' in state ? state.metadata : undefined);
     if (named) {
         return named;
     }

@@ -294,6 +294,8 @@ const SECRET_PARAMETER_PROPERTIES = {
     type: 'object', properties: {
       env: { type: 'string', pattern: '^(?!__proto__$)[A-Za-z_][A-Za-z0-9_]*$', description: 'Unique environment variable receiving this private value' },
       label: { type: 'string', minLength: 1, maxLength: 120, description: "Short purpose in the user's language, shown above this password field" },
+      reuse: { type: 'boolean', description: 'Default false. Store and reuse this binding in this session for 10 minutes from submission. Only passwords or long-lived tokens; never OTPs or credentials the user said not to remember' },
+      refresh: { type: 'boolean', description: 'Default false. Ask for a fresh value even if this env name has a valid lease; reuse still controls whether the new value is retained' },
     }, required: ['env', 'label'], additionalProperties: false,
   } },
   env: { type: 'object', additionalProperties: { type: 'string' }, description: 'Public environment settings only; must not overlap inputs[].env' },
@@ -386,6 +388,7 @@ const IMAGE_TOOL_DESCRIPTION = "Generate or edit images with the image model the
 
 const SECRET_TOOL_DESCRIPTION = "Collect private inputs on a password card in the chat and wait for the user. Never put secrets in tool arguments, public environment, labels or chat. "
   + "secret.run authorizes one program before showing the card, injects all values into that process environment in memory, and returns only status, exitCode and literal-redacted stdout/stderr. Runs on the OpenChamber server host as its user, on macOS/Linux. No automatic retry. The program must recheck state and connections after submission: the user may take 30 minutes or longer. "
+  + "With inputs[].reuse, later calls using the same env name reuse its valid session lease; only missing inputs get a card. Reuse never extends expiry or skips command permissions. Leases have a 30-minute absolute session window cap and disappear on server restart. Call secrets.revoke when the user says forget it or the task is done. "
   + "This is not a sandbox: the program and its descendants can read the values and cause external effects. Cancellation kills the local process group but cannot undo effects. Redaction covers complete literal values only, not transformations. "
   + "secret.request (default) keeps file mode: requires label/reason, saves one secret to a private file deleted after 24 hours, and returns its path. Read that file only inside the command needing it; never print, log or copy it into the project. Decline or a chat message cancels the wait.";
 
@@ -622,9 +625,35 @@ const SECRET_EXECUTION_PERMISSION = String.raw`          if (args.action === "se
             await ctx.permission.assert({ ...permission, action: "shell", resources: ["cd " + quote(request.workdir) + " && env " + (publicEnv ? publicEnv + " " : "") + command], metadata: request })
             waitSignal.throwIfAborted()
             Object.assign(args, request)
-            await progress({ secretExecution: true })
           }
 `;
+
+// Only public missing bindings travel in progress frames; submitted values
+// never cross the plugin callback. A new frame can ask for a lease that expired
+// while the user was filling another field.
+const SECRET_EXECUTION_RESPONSE = String.raw`          let content
+          if (response.headers.get("content-type")?.startsWith("application/x-ndjson")) {
+            const reader = response.body.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ""
+            try {
+              while (true) {
+                const { done, value } = await reader.read()
+                buffer += decoder.decode(value, { stream: !done })
+                let newline
+                while ((newline = buffer.indexOf("\n")) !== -1) {
+                  const frame = JSON.parse(buffer.slice(0, newline))
+                  buffer = buffer.slice(newline + 1)
+                  if (Array.isArray(frame.inputs)) await progress({ secretExecution: true, secretInputs: frame.inputs })
+                  if (frame.result) content = JSON.stringify(frame.result)
+                }
+                if (done) break
+              }
+            } finally {
+              await reader.cancel().catch(() => {})
+              reader.releaseLock()
+            }
+          } else content = await response.text()`;
 
 // A chat message can arrive after the values were consumed. Execution
 // cancellation must not claim the user never supplied them.
@@ -715,7 +744,7 @@ ${secret ? SECRET_EXECUTION_PERMISSION : ''}          const response = await fet
             body: JSON.stringify({ input: args, sessionID: context.sessionID, callID: context.id, tool: ${JSON.stringify(name)} }),
             signal: ${answers ? 'waitSignal' : 'context.signal'},${answers ? ANSWER_FETCH_TIMEOUT : ''}
           })
-          const content = await response.text()
+${secret ? SECRET_EXECUTION_RESPONSE : '          const content = await response.text()'}
           let result = null
           try { result = JSON.parse(content) } catch {}
           const valid = result?.schemaVersion === ${TOOL_SCHEMA_VERSION} && typeof result?.ok === "boolean" && typeof result?.action === "string"
@@ -863,7 +892,7 @@ const createPluginSource = ({ includeControl, includeSchedule, includeWeb, inclu
       // Never behind Code Mode, like render: the chat draws the card from
       // this tool's own call, and the answer has to reach that call.
       codeMode: false,
-      answers: { waitsWhen: 'true', closedInChatNote: SECRET_REQUEST_CLOSED_IN_CHAT_NOTE },
+      answers: { waitsWhen: 'args.action !== "secrets.revoke" && args.action !== "revoke"', closedInChatNote: SECRET_REQUEST_CLOSED_IN_CHAT_NOTE },
     }));
   }
   if (includeImage) {
@@ -1056,7 +1085,7 @@ export const createAgentToolRuntime = (dependencies) => {
     }
     try {
       // The calling session scopes browser actions to that session's page.
-      const contextSessionId = knowledgeAction ? sessionID : asNonEmptyString(payload.contextSessionId) ?? sessionID;
+      const contextSessionId = knowledgeAction || action === 'secret.run' || action === 'secrets.revoke' ? sessionID : asNonEmptyString(payload.contextSessionId) ?? sessionID;
       // The call id lets a page that waits for an answer be found again
       // when the user answers it.
       const contextCallId = asNonEmptyString(payload.callID);
@@ -1117,10 +1146,23 @@ export const createAgentToolRuntime = (dependencies) => {
       req.once('aborted', abortOnDisconnect);
       res.once('close', abortOnDisconnect);
       const untrack = trackInflight(asNonEmptyString(req.body?.sessionID), controller);
+      const finish = (result) => res.headersSent
+        ? res.end(`${JSON.stringify({ result })}\n`)
+        : res.json(result);
       try {
-        return res.json(await execute(req.body, { signal: controller.signal }));
+        return finish(await execute(req.body, {
+          signal: controller.signal,
+          onSecretInputs: (inputs) => {
+            if (controller.signal.aborted) return;
+            if (!res.headersSent) {
+              res.setHeader('Content-Type', 'application/x-ndjson');
+              res.setHeader('Cache-Control', 'no-store, no-transform');
+            }
+            res.write(`${JSON.stringify({ inputs })}\n`);
+          },
+        }));
       } catch (error) {
-        return res.json(createResult({
+        return finish(createResult({
           ok: false,
           action: req.body?.input?.action,
           error: { message: error instanceof Error ? error.message : String(error), kind: 'runtime' },

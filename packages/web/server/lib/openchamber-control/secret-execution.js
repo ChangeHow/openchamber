@@ -39,7 +39,11 @@ export function normalizeSecretExecution(input, baseDirectory, { isAbsolute, res
       throw new Error("Invalid private input label.");
     }
     keys.add(item.env);
-    return { env: item.env, label: item.label };
+    if ((item.reuse !== undefined && item.reuse !== true && item.reuse !== false) ||
+      (item.refresh !== undefined && item.refresh !== true && item.refresh !== false)) {
+      throw new Error("Invalid private input reuse or refresh flag.");
+    }
+    return { env: item.env, label: item.label, reuse: item.reuse === true, refresh: item.refresh === true };
   });
   const publicEnv = input.env === undefined ? {} : input.env;
   if (!isRecord(publicEnv))

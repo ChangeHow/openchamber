@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import express from 'express';
+import compression from 'compression';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -723,7 +724,7 @@ describe('managed agent tool runtime', () => {
     expect(tool.openchamber_render.description).toContain('add no outer card, border or banner title');
   });
 
-  it('exposes secret as its own direct tool whose every call waits for the user', async () => {
+  it('exposes secret as its own direct tool with cancellable private-input waits', async () => {
     const { runtime, dataDir } = await createRuntime();
     await prepareManagedEnv(runtime, { includeControl: false, includeWeb: false, includeMemory: false, includeSecret: true });
     const hooks = {};
@@ -750,14 +751,14 @@ describe('managed agent tool runtime', () => {
     const progress = vi.fn(async (metadata) => { if (metadata.openchamber_secret.secretExecution) order.push('card'); });
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
       order.push('callback');
-      return new Response(JSON.stringify({ schemaVersion: 1, ok: true, action: 'secret.run', data: { status: 'cancelled', exitCode: null, stdout: '', stderr: '' } }));
+      return new Response(JSON.stringify({ inputs: [{ env: 'PASSWORD', label: 'Password' }] }) + '\n' + JSON.stringify({ result: { schemaVersion: 1, ok: true, action: 'secret.run', data: { status: 'cancelled', exitCode: null, stdout: '', stderr: '' } } }) + '\n', { headers: { 'content-type': 'application/x-ndjson' } });
     });
     vi.stubEnv('OPENCHAMBER_AGENT_TOOL_URL', 'http://localhost:3901/api/openchamber/agent-tool');
     vi.stubEnv('OPENCHAMBER_AGENT_TOOL_TOKEN', 'synthetic-callback-token');
     try {
       const context = { sessionID: 'ses_permission', id: 'call_1', messageID: 'msg_1', agent: 'build', signal: new AbortController().signal, progress };
       await tools.openchamber_secret.execute(input, context);
-      expect(order).toEqual(['external_directory', 'shell', 'card', 'callback']);
+      expect(order).toEqual(['external_directory', 'shell', 'callback', 'card']);
       const workdir = await fs.realpath(outside);
       expect(assert.mock.calls[1][0]).toMatchObject({ action: 'shell', resources: [`cd '${workdir}' && env 'PUBLIC=a b' '/bin/echo' 'public'\\''s argument'`], source: { type: 'tool', messageID: 'msg_1', id: 'call_1' } });
       for (denied of ['external_directory', 'shell']) {
@@ -790,28 +791,63 @@ describe('managed agent tool runtime', () => {
     const assert = vi.fn(async () => {});
     const tools = await loadTools(dataDir, 'secret-live', {}, [], [], { permission: { assert }, location: { directory: process.cwd() } });
     const app = express();
+    app.use(compression({ threshold: 1024 }));
     runtime.registerRoutes(app, express);
     registerOpenChamberControlRoutes(app, { controlService: service });
     const server = await new Promise((resolve) => { const listener = app.listen(0, '127.0.0.1', () => resolve(listener)); });
     vi.stubEnv('OPENCHAMBER_AGENT_TOOL_URL', `http://127.0.0.1:${server.address().port}/api/openchamber/agent-tool`);
     vi.stubEnv('OPENCHAMBER_AGENT_TOOL_TOKEN', prepared.OPENCHAMBER_AGENT_TOOL_TOKEN);
-    const progress = vi.fn(async () => {});
+    let cardReady;
+    const card = new Promise((resolve) => { cardReady = resolve; });
+    const progress = vi.fn(async (metadata) => { if (metadata.openchamber_secret.secretInputs?.length) cardReady(); });
     const logs = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const pending = tools.openchamber_secret.execute({ action: 'secret.run', parameters: {
-        program: process.execPath, args: ['-e', 'process.stdout.write(process.env.PASSWORD); process.stderr.write(process.env.OTP)'],
-        inputs: [{ env: 'PASSWORD', label: 'Password' }, { env: 'OTP', label: 'Code' }],
+        program: process.execPath, workdir: dataDir, args: ['-e', 'process.stdout.write(process.env.PASSWORD); process.stderr.write(process.env.OTP)'],
+        inputs: [{ env: 'PASSWORD', label: 'Password', reuse: true }, { env: 'OTP', label: 'Code' }],
       } }, { sessionID: 'ses_execution', id: 'call_execution', signal: new AbortController().signal, progress });
-      await Promise.race([waiting, pending.then((result) => { throw new Error(result.content); })]);
+      await Promise.race([Promise.all([waiting, card]), pending.then((result) => { throw new Error(result.content); })]);
       expect(requestedSecret('openchamber_secret', { status: 'running', input: { action: 'secret.run', inputs: [{ env: 'PASSWORD', label: 'Password' }, { env: 'OTP', label: 'Code' }] }, metadata: progress.mock.lastCall[0], time: { start: 1 } })).toMatchObject({ state: 'waiting' });
       const values = { PASSWORD: 'synthetic-private-password', OTP: 'synthetic-private-code' };
       const answer = await request(server).post('/api/openchamber/secret/answer').send({ sessionId: 'ses_execution', callId: 'call_execution', values }).expect(200);
       expect(answer.body).toEqual({ status: 'submitted' });
       const result = await pending;
-      expect(assert.mock.calls.map(([permission]) => permission.action)).toEqual(['shell']);
+      expect(assert.mock.calls.map(([permission]) => permission.action)).toEqual(['external_directory', 'shell']);
       expect(JSON.parse(result.content)).toMatchObject({ ok: true, data: { status: 'completed', exitCode: 0, stdout: '[REDACTED]', stderr: '[REDACTED]' } });
       expect(result.metadata.openchamber).not.toHaveProperty('answer');
       for (const value of Object.values(values)) expect(JSON.stringify({ result, progress: progress.mock.calls, changes, logs: logs.mock.calls })).not.toContain(value);
+      const partialCard = new Promise((resolve) => { cardReady = resolve; });
+      const mixedInput = { action: 'secret.run', program: process.execPath, workdir: dataDir,
+        args: ['-e', 'process.stdout.write(process.env.PASSWORD); process.stderr.write(process.env.OTP)'],
+        inputs: [{ env: 'PASSWORD', label: 'Password', reuse: true }, { env: 'OTP', label: 'Code' }],
+      };
+      const mixed = tools.openchamber_secret.execute(mixedInput,
+        { sessionID: 'ses_execution', id: 'call_mixed', signal: new AbortController().signal, progress });
+      await partialCard;
+      expect(requestedSecret('openchamber_secret', { status: 'running', input: mixedInput, metadata: progress.mock.lastCall[0], time: { start: 1 } })?.inputs)
+        .toEqual([{ env: 'OTP', label: 'Code' }]);
+      const mixedAnswer = await request(server).post('/api/openchamber/secret/answer')
+        .send({ sessionId: 'ses_execution', callId: 'call_mixed', values: { OTP: values.OTP } }).expect(200);
+      expect(mixedAnswer.body).toEqual({ status: 'submitted' });
+      expect(JSON.parse((await mixed).content)).toMatchObject({ ok: true, data: { status: 'completed', reused: ['PASSWORD'] } });
+      const before = progress.mock.calls.length;
+      const retried = await tools.openchamber_secret.execute({ action: 'secret.run', program: process.execPath, workdir: dataDir,
+        args: ['-e', 'process.stdout.write(process.env.PASSWORD)'], inputs: [{ env: 'PASSWORD', label: 'Password', reuse: true }],
+      }, { sessionID: 'ses_execution', id: 'call_retry', signal: new AbortController().signal, progress });
+      expect(JSON.parse(retried.content)).toMatchObject({ ok: true, data: { status: 'completed', stdout: '[REDACTED]', reused: ['PASSWORD'] } });
+      expect(assert.mock.calls.map(([permission]) => permission.action)).toEqual(['external_directory', 'shell', 'external_directory', 'shell', 'external_directory', 'shell']);
+      expect(progress.mock.calls.slice(before).some(([metadata]) => metadata.openchamber_secret.secretInputs?.length)).toBe(false);
+      const revoked = await tools.openchamber_secret.execute({ action: 'secrets.revoke' }, { sessionID: 'ses_execution', id: 'call_revoke', signal: new AbortController().signal, progress });
+      expect(JSON.parse(revoked.content)).toMatchObject({ ok: true, data: { status: 'revoked' } });
+      const cancelledCard = new Promise((resolve) => { cardReady = resolve; });
+      const controller = new AbortController();
+      const cancelled = tools.openchamber_secret.execute(mixedInput,
+        { sessionID: 'ses_execution', id: 'call_cancel_stream', signal: controller.signal, progress });
+      await cancelledCard;
+      expect(progress.mock.lastCall[0].openchamber_secret.secretInputs).toHaveLength(2);
+      controller.abort();
+      expect(JSON.parse((await cancelled).content)).toMatchObject({ ok: true, data: { status: 'cancelled' } });
+      for (const value of Object.values(values)) expect(JSON.stringify({ retried, revoked, mixedAnswer: mixedAnswer.body, progress: progress.mock.calls })).not.toContain(value);
       await request(server).post('/api/openchamber/control').send({ action: 'secret.run', input: {} }).expect(403);
     } finally {
       logs.mockRestore();

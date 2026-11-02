@@ -26,6 +26,13 @@ to the shared UI domain model. Sync owns transcript membership and store writes.
   lives in `agent-unavailable-error.ts`, so code that only reads the error does
   not load the client.
 
+- Execution secret cards read only the server's current `secretInputs` progress
+  metadata after permission assertions. Original call bindings are not a
+  request to collect every value: some may be leased. An empty list draws no
+  card, and later progress can request an expired binding. Metadata contains
+  only public env names and labels. The running status uses that same list to
+  distinguish input waits from leased execution; revocation never waits.
+
 ## Decisions
 
 ### Why fresh provider reads wait for post-call requests
