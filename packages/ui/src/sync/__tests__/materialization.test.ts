@@ -390,6 +390,33 @@ describe("materializeSessionSnapshots", () => {
     expect(merged.state.metadata).toEqual({ sessionID: "ses_child" })
   })
 
+  test("does not reopen secret inputs from a delayed snapshot and accepts newer recovery progress", () => {
+    const progress = { secretExecution: true, secretInputs: [], revision: 2 };
+    const runningTool = {
+      id: "prt_secret", messageID: "msg_1", sessionID: "ses_1", callID: "call_1", type: "tool",
+      tool: "openchamber_secret",
+      state: { status: "running", input: { action: "secret.run" }, metadata: { openchamber_secret: progress }, time: { start: 1000 } },
+    } satisfies ToolPart;
+    const state = { message: { ses_1: [message("msg_1")] }, part: { msg_1: [runningTool] } };
+    const stale = { ...runningTool, state: { ...runningTool.state, metadata: {
+      openchamber_secret: { secretExecution: true, secretInputs: [{ env: "PASSWORD", label: "Password" }], revision: 1 },
+    } } };
+    const merged = materializeSessionSnapshots(state, "ses_1", [{ info: message("msg_1"), parts: [stale] }]);
+    const part = merged.part.msg_1[0];
+    if (part?.type !== "tool" || part.state.status !== "running") throw new Error("Expected running secret tool");
+    expect(part.state.metadata?.openchamber_secret).toEqual(progress);
+
+    const beforeExecution = { ...stale, state: { ...stale.state, metadata: {} } };
+    const withoutProgress = materializeSessionSnapshots(merged, "ses_1", [{ info: message("msg_1"), parts: [beforeExecution] }]);
+    expect(withoutProgress.part.msg_1[0]).toMatchObject({ state: { metadata: { openchamber_secret: progress } } });
+
+    const newer = { ...stale, state: { ...stale.state, metadata: {
+      openchamber_secret: { secretExecution: true, secretInputs: [{ env: "OTP", label: "Code" }], revision: 3 },
+    } } };
+    const recovered = materializeSessionSnapshots(merged, "ses_1", [{ info: message("msg_1"), parts: [newer] }]);
+    expect(recovered.part.msg_1[0]).toEqual(newer);
+  });
+
   test("does not regress a completed tool when a stale running snapshot arrives", () => {
     const completedTool = {
       id: "prt_1",

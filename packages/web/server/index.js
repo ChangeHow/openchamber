@@ -1530,6 +1530,7 @@ const serverUtilsRuntime = createServerUtilsRuntime({
   getArchivedSessions: () => openChamberSessionService.archiveStore.getAll(),
   getUnreadBaseline: () => unreadBaseline.get(),
   getStoredSessionMetadata: () => sessionMetadataStore.listUnmigrated(),
+  getMessageProgress: (sessionId) => openChamberControlService.secretMessageProgress(sessionId),
   // Isolated spaces: with the switch on, the session list carries every space's sessions and
   // the global SSE stream their events. Called, not captured: the host is made in `main`.
   getMergeSpaceSessionList: () => (spacesHost ? (payload) => spacesHost.mergeSessionList(payload) : null),

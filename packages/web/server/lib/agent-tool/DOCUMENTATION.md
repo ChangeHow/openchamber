@@ -100,9 +100,9 @@ the user can want independently:
   A missing `ctx.permission.assert` refuses execution mode. Only after approval
   does the normalized request reach the server, with the same wait and
   cancellation machinery. The callback uses private NDJSON progress frames for
-  execution mode: `{ inputs }` carries only the currently missing public
-  bindings, and `{ result }` carries the final versioned envelope. The plugin
-  forwards inputs as `secretExecution: true, secretInputs` metadata; the UI
+  execution mode: `{ inputs, revision }` carries only the currently missing public
+  bindings and their per-call revision, and `{ result }` carries the final versioned envelope. The plugin
+  forwards inputs as `secretExecution: true, secretInputs, revision` metadata; the UI
   draws those fields only. An empty array hides the card for a fully leased
   run or after all fields are satisfied. Later frames can ask for bindings
   whose leases expired while another field waited. The stream stays on the

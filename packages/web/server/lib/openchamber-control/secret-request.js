@@ -65,6 +65,29 @@ export const createSecretFiles = ({ directory, now = Date.now, fsPromises = fs }
   return { write, remove, sweep };
 };
 
+/** Restore transient tool progress on an ordinary OpenCode message page. */
+const restoreSecretMessagePage = (payload, progressForCall) => {
+  if (!isRecord(payload) || !Array.isArray(payload.data)) return payload;
+  let changed = false;
+  const data = payload.data.map((message) => {
+    if (!isRecord(message) || !Array.isArray(message.content)) return message;
+    let messageChanged = false;
+    const content = message.content.map((tool) => {
+      if (tool?.type !== 'tool' || tool.name !== 'openchamber_secret' || tool.state?.status !== 'running') return tool;
+      const progress = progressForCall(tool.id);
+      if (!progress) return tool;
+      messageChanged = true;
+      const metadata = isRecord(tool.state.metadata) ? tool.state.metadata : {};
+      const previous = isRecord(metadata.openchamber_secret) ? metadata.openchamber_secret : {};
+      return { ...tool, state: { ...tool.state, metadata: { ...metadata, openchamber_secret: { ...previous, ...progress } } } };
+    });
+    if (!messageChanged) return message;
+    changed = true;
+    return { ...message, content };
+  });
+  return changed ? { ...payload, data } : payload;
+};
+
 /**
  * `secret.request`: the chat shows a card for the call, and the call waits
  * until the user saves a value or declines. The wait is a page wait
@@ -83,6 +106,24 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
   // wait events, tool results or files.
   const executions = new Map();
   const keyFor = (sessionId, callId) => `${sessionId}\0${callId}`;
+  const publicInputs = (inputs) => inputs.map(({ env, label }) => ({ env, label }));
+
+  // Snapshot recovery reads the same public progress as the live callback.
+  // Never return an execution entry: it also holds submitted private values.
+  const executionProgress = (sessionId, callId) => {
+    const entry = executions.get(keyFor(sessionId, callId));
+    return entry ? { secretExecution: true, secretInputs: publicInputs(entry.pendingInputs), revision: entry.revision } : undefined;
+  };
+  const hasSessionExecution = (sessionId) => {
+    const prefix = `${sessionId}\0`;
+    for (const key of executions.keys()) if (key.startsWith(prefix)) return true;
+    return false;
+  };
+  const messageProgress = (sessionId) => {
+    if (!hasSessionExecution(sessionId)) return null;
+    // Read after the upstream response arrives, not when its request starts.
+    return (payload) => restoreSecretMessagePage(payload, (callId) => executionProgress(sessionId, callId));
+  };
 
   const run = async (input, { sessionId, callId, directory, signal = new AbortController().signal, onInputs = () => {} } = {}) => {
     if (!await isEnabled()) throw new OpenChamberControlError('The secret tool is turned off in OpenChamber settings', 403);
@@ -97,7 +138,7 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
     if (await hasUnreadChat(sessionId)) return { status: 'cancelled', exitCode: null, stdout: '', stderr: '' };
     const key = keyFor(sessionId, callId);
     if (executions.has(key)) throw new OpenChamberControlError('This call already waits for private inputs', 409);
-    const entry = { pendingInputs: [], values: {}, submitted: new Set() };
+    const entry = { pendingInputs: [], values: {}, submitted: new Set(), revision: 0 };
     executions.set(key, entry);
     try {
       while (!signal.aborted) {
@@ -110,15 +151,17 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
           const values = { ...leased, ...entry.values };
           missing = execution.inputs.filter((binding) => !Object.hasOwn(values, binding.env));
           if (!missing.length) {
-            onInputs([]);
+            entry.pendingInputs = [];
+            onInputs([], ++entry.revision);
             const reused = Object.keys(leased).filter((env) => !entry.submitted.has(env));
             const result = await runSecret(execution, values, signal);
             return reused.length ? { ...result, reused } : result;
           }
         }
         entry.pendingInputs = missing;
+        entry.revision++;
         const pending = waits.wait({ sessionId, callId, title: missing[0].label, directory, signal });
-        onInputs(missing.map(({ env, label }) => ({ env, label })));
+        onInputs(publicInputs(missing), entry.revision);
         const answer = await pending;
         if (answer.summary !== 'submitted') break;
       }
@@ -253,5 +296,5 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
     return { status: 'revoked' };
   };
 
-  return { request, run, answer, revoke };
+  return { request, run, answer, revoke, messageProgress };
 };

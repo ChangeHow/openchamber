@@ -403,6 +403,8 @@ export const registerOpenCodeProxy = (app, deps) => {
     // migrated.
     getArchivedSessions = null,
     getStoredSessionMetadata = null,
+    // Runtime-owned transient tool state, absent from OpenCode history.
+    getMessageProgress = null,
     // OpenCode's unread state predates OpenChamber reading it; turns that ended
     // before the baseline are served as seen (`unread-baseline.js`).
     getUnreadBaseline = null,
@@ -1241,11 +1243,11 @@ export const registerOpenCodeProxy = (app, deps) => {
     }
   });
 
-  // A client that asks for it gets message pages with finished tool results
-  // shelled (see message-shells.js); anyone else reaches OpenCode untouched.
+  // Restore host-owned live tool state on message reads. Finished result
+  // shells remain opt-in; unrelated payloads retain their upstream data.
   app.get('/api/session/:sessionID/message', async function forwardMessageListRequest(req, res, next) {
     const keepWhole = parsePartShellsHeader(req.get(PART_SHELLS_HEADER));
-    if (!keepWhole) return next();
+    if (!keepWhole && !getMessageProgress) return next();
     try {
       // The signal is built before the path canonicalization: that waits on a
       // realpath, and a client that hangs up during the wait must still cancel
@@ -1260,7 +1262,10 @@ export const registerOpenCodeProxy = (app, deps) => {
         res.end(result.bodyText);
         return;
       }
-      res.json(shellMessagePage(result.payload, keepWhole));
+      const payload = keepWhole ? shellMessagePage(result.payload, keepWhole) : result.payload;
+      // An execution can enter its wait while this upstream read is in flight.
+      const restoreProgress = getMessageProgress?.(req.params.sessionID);
+      res.json(restoreProgress ? restoreProgress(payload) : payload);
     } catch (error) {
       const status = sessionRouteErrorStatus(error);
       if (status === null) return;

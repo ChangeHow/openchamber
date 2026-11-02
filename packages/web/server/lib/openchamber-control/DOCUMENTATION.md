@@ -130,6 +130,10 @@ other.
   One-shot values stay call-local. Page answers and wait events carry only a
   submission marker. Decline or abort before submission starts no process;
   stale answers are refused. No execution answer enters `createSecretFiles`.
+  `messageProgress(sessionId)` restores public missing fields and a per-call
+  revision onto running message pages after the upstream response arrives.
+  This recovers late clients through existing reads without polling. Snapshots
+  never serialize private entries or drafts; live and snapshot revisions agree.
 - `secret-leases.js` owns process-local, session-scoped credential leases.
   Only submitted `reuse: true` bindings are retained; OTPs must use the default
   `reuse: false`. Each entry's deadline is issuance plus 10 minutes, truncated
