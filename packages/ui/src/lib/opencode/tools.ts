@@ -20,7 +20,7 @@
 
 import { z } from "zod"
 
-import type { JsonValue, Metadata, ToolInput, ToolState } from "./model"
+import type { JsonValue, Metadata, ToolInput, ToolPart, ToolState } from "./model"
 
 /** Built-in tool names as the server reports them. */
 export const OPENCODE_TOOLS = {
@@ -504,7 +504,7 @@ export type SecretRequestState = "waiting" | "saved" | "declined" | "not-given" 
 // chat. The file path the agent got is not needed here.
 const secretResultSchema = z
   .object({
-    openchamber_secret: z.object({ secretExecution: z.boolean().optional(), secretInputs: secretBindingsSchema.optional().catch(undefined) }).optional().catch(undefined),
+    openchamber_secret: z.object({ secretExecution: z.boolean().optional(), secretInputs: secretBindingsSchema.optional().catch(undefined), revision: z.number().int().nonnegative().optional().catch(undefined) }).optional().catch(undefined),
     openchamber: z.object({
       ok: z.boolean().optional().catch(undefined),
       answer: z.union([
@@ -514,6 +514,21 @@ const secretResultSchema = z
     }).optional().catch(undefined),
   })
   .catch({})
+
+/** Snapshots and live events share the execution's monotonic revision. */
+export function withNewerSecretProgress(existing: ToolPart, incoming: ToolPart): ToolPart {
+  if (existing.tool !== OPENCHAMBER_SECRET_TOOL || incoming.tool !== OPENCHAMBER_SECRET_TOOL
+    || existing.state.status !== "running") return incoming
+  const previous = existing.state.metadata?.openchamber_secret
+  if (previous === undefined) return incoming
+  const current = secretResultSchema.parse(existing.state.metadata ?? {}).openchamber_secret
+  if (current?.revision === undefined) return incoming
+  if (incoming.state.status === "pending") return existing
+  if (incoming.state.status !== "running") return incoming
+  const next = secretResultSchema.parse(incoming.state.metadata ?? {}).openchamber_secret
+  if (next?.revision !== undefined && current.revision <= next.revision) return incoming
+  return { ...incoming, state: { ...incoming.state, metadata: { ...incoming.state.metadata, openchamber_secret: previous } } }
+}
 
 export type RequestedSecret = { label: string; reason: string; placeholder: string | undefined; state: SecretRequestState; inputs?: Array<{ env: string; label: string }> }
 

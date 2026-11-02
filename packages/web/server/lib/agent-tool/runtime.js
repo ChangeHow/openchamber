@@ -645,7 +645,7 @@ const SECRET_EXECUTION_RESPONSE = String.raw`          let content
                 while ((newline = buffer.indexOf("\n")) !== -1) {
                   const frame = JSON.parse(buffer.slice(0, newline))
                   buffer = buffer.slice(newline + 1)
-                  if (Array.isArray(frame.inputs)) await progress({ secretExecution: true, secretInputs: frame.inputs })
+                  if (Array.isArray(frame.inputs)) await progress({ secretExecution: true, secretInputs: frame.inputs, revision: frame.revision })
                   if (frame.result) content = JSON.stringify(frame.result)
                 }
                 if (done) break
@@ -1153,13 +1153,13 @@ export const createAgentToolRuntime = (dependencies) => {
       try {
         return finish(await execute(req.body, {
           signal: controller.signal,
-          onSecretInputs: (inputs) => {
+          onSecretInputs: (inputs, revision) => {
             if (controller.signal.aborted) return;
             if (!res.headersSent) {
               res.setHeader('Content-Type', 'application/x-ndjson');
               res.setHeader('Cache-Control', 'no-store, no-transform');
             }
-            res.write(`${JSON.stringify({ inputs })}\n`);
+            res.write(`${JSON.stringify({ inputs, revision })}\n`);
           },
         }));
       } catch (error) {

@@ -10,6 +10,7 @@ import {
 } from "@/lib/opencode/model"
 import { Binary } from "./binary"
 import { withoutUnshownResult } from "@/lib/opencode/toolContentShells"
+import { withNewerSecretProgress } from "@/lib/opencode/tools"
 import type { State } from "./types"
 import { dropSessionCaches } from "./session-cache"
 import { syncDebug } from "./debug"
@@ -259,14 +260,14 @@ function applyToolTransition(part: ToolPart, transition: ToolTransition): ToolPa
       return { ...part, state: { ...state, raw: transition.raw } }
     case "called":
       if (isFinalToolStatus(state.status)) return part
-      return {
+      return withNewerSecretProgress(part, {
         ...part,
         executed: transition.executed,
         state: { status: "running", input: transition.input, time: { start: transition.start } },
-      }
+      })
     case "progress":
       if (state.status !== "running") return part
-      return { ...part, state: { ...state, metadata: transition.metadata } }
+      return withNewerSecretProgress(part, { ...part, state: { ...state, metadata: transition.metadata } })
     case "success": {
       if (isFinalToolStatus(state.status) && !isLocallyMarkedToolState(state)) return part
       const start = state.status === "pending" ? transition.end : state.time.start
@@ -589,7 +590,10 @@ export function applyDirectoryEvent(
           return false
         }
         const dedupeFields = getUpdatedDeltaFields(previous, part)
-        const settled = withStreamedStart(previous, part)
+        const streamed = withStreamedStart(previous, part)
+        const settled = previous.type === "tool" && streamed.type === "tool"
+          ? withNewerSecretProgress(previous, streamed)
+          : streamed
         // SAFETY: the dedupe marker is a private annotation the delta reducer
         // strips again; the part itself is unchanged.
         next[partIndex] = dedupeFields.length > 0

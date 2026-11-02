@@ -1334,6 +1334,7 @@ export const createOpenChamberControlService = (dependencies) => {
     resolveSessionDirectory,
     answerPage: pageAnswers.answer,
     answerSecret: secretRequests.answer,
+    secretMessageProgress: secretRequests.messageProgress,
     releaseAnswerWaits,
     stopSession,
     answerPermission,

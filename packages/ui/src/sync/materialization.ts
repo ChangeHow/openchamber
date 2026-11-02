@@ -3,6 +3,7 @@ import { mergeMessages } from "./optimistic"
 import type { SessionMaterializationReason } from "./event-reducer"
 import { sortMessagesChronologically } from "./message-ordering"
 import { toolContentShellChars } from "@/lib/opencode/toolContentShells"
+import { withNewerSecretProgress } from "@/lib/opencode/tools"
 
 const STREAMING_PART_FIELDS = ["text", "output"] as const
 const ACTIVE_TOOL_STATUSES = new Set(["pending", "running"])
@@ -220,6 +221,7 @@ function mergeMaterializedPart(existing: Part | undefined, next: Part): Part {
     ) {
       next = { ...next, state: { ...next.state, metadata: existing.state.metadata } }
     }
+    next = withNewerSecretProgress(existing, next)
   }
 
   if (getPartEndTime(next) !== undefined) {

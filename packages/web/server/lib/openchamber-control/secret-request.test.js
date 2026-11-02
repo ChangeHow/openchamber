@@ -259,7 +259,7 @@ describe.skipIf(process.platform === 'win32')('session credential reuse', () => 
     expect(await requests.run({ ...input, inputs: [bindings[0]] }, {
       sessionId: 'session', callId: 'retry-cancelled', directory: process.cwd(), onInputs: cards,
     })).toMatchObject({ status: 'completed', reused: ['PASSWORD'] });
-    expect(cards).toHaveBeenCalledExactlyOnceWith([]);
+    expect(cards).toHaveBeenCalledExactlyOnceWith([], 1);
   });
 
   it.each(['expiry', 'revoke'])('re-asks a lease invalidated by %s while another input waits, before spawning', async (reason) => {

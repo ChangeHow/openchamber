@@ -113,6 +113,13 @@ of button visibility.
 
 ## Ownership map
 
+Secret execution progress is transient in OpenCode. The OpenChamber server
+restores public missing fields onto running message snapshots for late clients.
+Materialization and event reduction use `withNewerSecretProgress` from the
+OpenCode tool projection to retain the newer per-call revision. Delayed
+snapshots and replayed starts cannot reopen submitted fields. No private values
+or input drafts enter sync state. See [the adapter contract](../lib/opencode/DOCUMENTATION.md).
+
 Queue delivery uses `hasActiveSubagent` with an explicit parent resolver over
 the cached sync session index. This keeps the 8-level ancestor walk shared
 with display activity while leaving the global display resolver unchanged.

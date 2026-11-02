@@ -32,6 +32,10 @@ to the shared UI domain model. Sync owns transcript membership and store writes.
   card, and later progress can request an expired binding. Metadata contains
   only public env names and labels. The running status uses that same list to
   distinguish input waits from leased execution; revocation never waits.
+- Running message snapshots recover the same public fields from the server's
+  execution registry. `withNewerSecretProgress` keeps the per-call revision in
+  materialization and event reduction, including replayed starts, so old updates
+  cannot reopen submitted fields. Input drafts stay local to each card.
 
 ## Decisions
 

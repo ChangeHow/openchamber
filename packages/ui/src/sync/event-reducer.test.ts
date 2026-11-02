@@ -375,6 +375,36 @@ describe("streaming parts", () => {
     ).toBe(false)
   })
 
+  test("replayed tool starts and progress cannot reopen secret fields recovered by a newer snapshot", () => {
+    const progress = { secretExecution: true, secretInputs: [], revision: 2 }
+    const draft = state({ part: { msg_a: [{
+      id: "call_1", sessionID: "ses_1", messageID: "msg_a", type: "tool", callID: "call_1", tool: "openchamber_secret",
+      state: { status: "running", input: { action: "secret.run" }, metadata: { openchamber_secret: progress }, time: { start: 11 } },
+    }] } })
+    apply(draft, {
+      type: "message.part.updated",
+      properties: { sessionID: "ses_1", part: {
+        id: "call_1", sessionID: "ses_1", messageID: "msg_a", type: "tool", callID: "call_1", tool: "openchamber_secret",
+        state: { status: "pending", input: {}, raw: "" },
+      } },
+    })
+    expect(draft.part.msg_a[0]).toMatchObject({ state: { status: "running", metadata: { openchamber_secret: progress } } })
+    apply(draft, {
+      type: "message.tool.transition",
+      properties: { sessionID: "ses_1", messageID: "msg_a", partID: "call_1", transition: {
+        kind: "called", input: { action: "secret.run" }, executed: true, start: 11,
+      } },
+    })
+    expect(draft.part.msg_a[0]).toMatchObject({ state: { metadata: { openchamber_secret: progress } } })
+    apply(draft, {
+      type: "message.tool.transition",
+      properties: { sessionID: "ses_1", messageID: "msg_a", partID: "call_1", transition: {
+        kind: "progress", metadata: { openchamber_secret: { secretExecution: true, secretInputs: [{ env: "PASSWORD", label: "Password" }], revision: 1 } },
+      } },
+    })
+    expect(draft.part.msg_a[0]).toMatchObject({ state: { metadata: { openchamber_secret: progress } } })
+  })
+
   test("server outcomes replace local interrupted tools and preserve their start time", () => {
     for (const transition of [
       { kind: "success" as const, output: "answered", executed: true, end: 15 },
