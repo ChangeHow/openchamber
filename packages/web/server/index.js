@@ -185,6 +185,7 @@ import { createPluginNotificationEmitter } from './lib/notifications/emit-route.
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import { createSessionLinker } from './lib/openchamber-sessions/session-link.js';
 import { createFileOpenRequester } from './lib/openchamber-control/file-open.js';
+import { createSecretLeases } from './lib/openchamber-control/secret-leases.js';
 import { createSecretFiles } from './lib/openchamber-control/secret-request.js';
 import { applyConnectAttemptTimeout } from './lib/network-defaults.js';
 import { applyOutboundProxyFromEnv } from './lib/outbound-proxy.js';
@@ -1529,6 +1530,7 @@ const serverUtilsRuntime = createServerUtilsRuntime({
   getArchivedSessions: () => openChamberSessionService.archiveStore.getAll(),
   getUnreadBaseline: () => unreadBaseline.get(),
   getStoredSessionMetadata: () => sessionMetadataStore.listUnmigrated(),
+  getMessageProgress: (sessionId) => openChamberControlService.secretMessageProgress(sessionId),
   // Isolated spaces: with the switch on, the session list carries every space's sessions and
   // the global SSE stream their events. Called, not captured: the host is made in `main`.
   getMergeSpaceSessionList: () => (spacesHost ? (payload) => spacesHost.mergeSessionList(payload) : null),
@@ -2073,6 +2075,9 @@ const pluginNotificationEmitter = createPluginNotificationEmitter({
   broadcastUiNotification,
 });
 
+// Execution leases expire in memory independently of a turn's waits.
+const secretLeases = createSecretLeases();
+setInterval(() => { secretLeases.sweep(); }, 60 * 1000).unref();
 // Secrets the user saved for an agent (secret.request). Each file is deleted
 // 24 hours after it was written: on start, and hourly while the server runs.
 const secretFiles = createSecretFiles({ directory: path.join(OPENCHAMBER_DATA_DIR, 'secrets') });
@@ -2125,6 +2130,7 @@ const openChamberControlService = createOpenChamberControlService({
     return settings?.agentSecretToolEnabled !== false;
   },
   secretFiles,
+  secretLeases,
   // A page that waits for the user's answer shows the session as waiting
   // the way a form does: the pending list the clients seed from, a live event
   // for the clients already connected, and the "Input needed" notification.

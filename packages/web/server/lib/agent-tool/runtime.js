@@ -1,7 +1,9 @@
 import os from 'node:os';
 import path from 'node:path';
 
-import { asNonEmptyString, isBoolean } from '../shared/guards.js';
+import { normalizeSecretExecution } from '../openchamber-control/secret-execution.js';
+
+import { asNonEmptyString, isBoolean, isRecord, isString } from '../shared/guards.js';
 import {
   OPENCHAMBER_AGENT_TOOL_ACTION_DEFINITIONS,
   OPENCHAMBER_AGENT_TOOL_ACTIONS,
@@ -279,6 +281,19 @@ const RENDER_PARAMETER_PROPERTIES = {
 
 // Its own names: `label` means something else in the web tool.
 const SECRET_PARAMETER_PROPERTIES = {
+  program: { type: 'string', description: 'secret.run: absolute executable path; no implicit shell' },
+  args: { type: 'array', items: { type: 'string' }, description: 'Public arguments only. The program must read private values from the declared environment variables' },
+  inputs: { type: 'array', minItems: 1, maxItems: 8, items: {
+    type: 'object', properties: {
+      env: { type: 'string', pattern: '^(?!__proto__$)[A-Za-z_][A-Za-z0-9_]*$', description: 'Unique environment variable receiving this private value' },
+      label: { type: 'string', minLength: 1, maxLength: 120, description: "Short purpose in the user's language, shown above this password field" },
+      reuse: { type: 'boolean', description: 'Default false. Store and reuse this binding in this session for 10 minutes from submission. Only passwords or long-lived tokens; never OTPs or credentials the user said not to remember' },
+      refresh: { type: 'boolean', description: 'Default false. Ask for a fresh value even if this env name has a valid lease; reuse still controls whether the new value is retained' },
+    }, required: ['env', 'label'], additionalProperties: false,
+  } },
+  env: { type: 'object', additionalProperties: { type: 'string' }, description: 'Public environment settings only; must not overlap inputs[].env' },
+  workdir: { type: 'string', description: 'Working directory, relative to the calling location or absolute; defaults to that location' },
+  timeoutMs: { type: 'integer', minimum: 1, maximum: 600000, description: 'Execution timeout after submission, default 120000 ms; excludes permission and input waits' },
   label: { type: 'string', description: `What the secret is, the card's title, such as Cloudflare API token. At most ${SECRET_REQUEST_MAX_LABEL_LENGTH} characters` },
   reason: { type: 'string', description: `In the user's language: what you will do with it, and where to create it when that is not obvious. At most ${SECRET_REQUEST_MAX_REASON_LENGTH} characters` },
   placeholder: { type: 'string', description: `The value's shape, such as sk-ant-...; at most ${SECRET_REQUEST_MAX_PLACEHOLDER_LENGTH} characters` },
@@ -360,9 +375,12 @@ const IMAGE_TOOL_DESCRIPTION = "Generate or edit images with the image model the
   + "The call returns the saved file paths, and the chat shows the images to the user, so do not repeat them in your reply. Read a file to look at it. "
   + "Without path the files go to OpenCode's temporary folder: move one into the project when it belongs there. Every call costs the user money: make what was asked, not extra variations.";
 
-const SECRET_TOOL_DESCRIPTION = "Ask the user for a secret (API key, token, password) on a private card in the chat, and wait for it. The card takes one line. "
-  + "A saved secret goes to a file only this user can read, deleted after 24 hours, and the call returns only its path. Read it inside the command that needs it (TOKEN=\"$(cat <file>)\" some-cli ...); never print, echo or log it, and never copy it into the project. "
-  + "The call returns status declined when the user declines, or answered: false when they wrote in the chat instead.";
+const SECRET_TOOL_DESCRIPTION = "Collect private inputs on a password card in the chat and wait for the user: a password, token or OTP, including website login and unlock flows. Prefer this over asking in chat or handing the task off solely for credential entry; use a local helper to bridge the input to the target application. Never put secrets in tool arguments, public environment, labels or chat. "
+  + "secret.run authorizes one program before showing the card, injects all values into that process environment in memory, and returns only status, exitCode and literal-redacted stdout/stderr. The program, or a helper it drives, must read the named environment variables. Runs on the OpenChamber server host as its user, on macOS/Linux. No automatic retry. "
+  + "The user may wait 30 minutes or longer, so state prepared before the wait may have expired: keep the program self-contained, and after the inputs arrive recheck current state, wake and focus the UI, and establish fresh connections. Do not rely on pre-prompt UI focus, screenshot coordinates, expiring sessions or other short-lived setup; recheck or refresh it inside the program before acting. "
+  + "With inputs[].reuse, later calls using the same env name reuse its valid session lease; only missing inputs get a card. Reuse never extends expiry or skips command permissions. Leases have a 30-minute absolute session window cap and disappear on server restart. Call secrets.revoke when the user says forget it or the task is done. "
+  + "This is not a sandbox or a general interactive terminal: the program and its descendants can read the values and cause external effects. Cancellation kills the local process group but cannot undo effects. Redaction covers complete literal values only, not transformations. "
+  + "secret.request (default) keeps file mode: requires label/reason, saves one secret to a private file deleted after 24 hours, and returns its path. Read that file only inside the command needing it; never print, log or copy it into the project. Decline or a chat message cancels the wait.";
 
 const WORKFLOW_TOOL_DESCRIPTION = 'Workflows: a script that fans a large task out to many agents, which OpenChamber runs in the background while you stay free. '
   + 'For work with many similar independent pieces (a review per file, an audit across many routes, a migration of many files, research cross-checked across sources) or a check that must run on every piece. A single feature or a few steps is not one: do it yourself or with a subagent. '
@@ -557,9 +575,8 @@ const singleActionSchema = (definition) => ({
  * the caller depends on.
  *
  * OpenCode 2 takes a tool's `input` as plain JSON Schema, so the generated file
- * needs no imports at all — which it must not have, because OpenCode loads the
- * entrypoint with a bare dynamic import and nothing resolves from the generated
- * directory.
+ * needs only Node built-ins. OpenCode loads the entrypoint with a bare dynamic
+ * import, so third-party modules cannot resolve from the generated directory.
  *
  * The action schema carries `oneOf` only. A node combining `enum` and `oneOf`
  * is valid JSON Schema, but some OpenAI-compatible gateways reject it and
@@ -571,10 +588,75 @@ const singleActionSchema = (definition) => ({
  * expression (over `args`) that says whether this call waits, and
  * `closedInChatNote` what the agent reads when the user wrote in the chat.
  */
+// Permission assertions live in OpenCode, before a callback can expose a card.
+// The server accepts secret.run only through this authenticated adapter.
+const SECRET_EXECUTION_PERMISSION = String.raw`          if (args.action === "secret.run" || args.action === "run") {
+            args.action = "secret.run"
+            if (process.platform === "win32") throw new Error("Private-input execution requires macOS or Linux")
+            if (typeof ctx.permission?.assert !== "function") throw new Error("Private-input execution requires OpenCode permission.assert")
+            waitSignal.throwIfAborted()
+            const request = normalizeSecretExecution(args, ctx.location.directory, { isAbsolute, resolve, isString, isRecord })
+            request.workdir = await realpath(request.workdir)
+            const outside = relative(await realpath(ctx.location.directory), request.workdir)
+            const permission = { sessionID: context.sessionID, agent: context.agent, source: { type: "tool", messageID: context.messageID, id: context.id } }
+            if (outside === ".." || outside.startsWith("../") || isAbsolute(outside)) {
+              await ctx.permission.assert({ ...permission, action: "external_directory", resources: [request.workdir] })
+              waitSignal.throwIfAborted()
+            }
+            const quote = (value) => "'" + value.replaceAll("'", "'\\''") + "'"
+            const command = [request.program, ...request.args].map(quote).join(" ")
+            const publicEnv = Object.entries(request.env).map(([key, value]) => quote(key + "=" + value)).join(" ")
+            await ctx.permission.assert({ ...permission, action: "shell", resources: ["cd " + quote(request.workdir) + " && env " + (publicEnv ? publicEnv + " " : "") + command], metadata: request })
+            waitSignal.throwIfAborted()
+            Object.assign(args, request)
+          }
+`;
+
+// Only public missing bindings travel in progress frames; submitted values
+// never cross the plugin callback. A new frame can ask for a lease that expired
+// while the user was filling another field.
+const SECRET_EXECUTION_RESPONSE = String.raw`          let content
+          if (response.headers.get("content-type")?.startsWith("application/x-ndjson")) {
+            const reader = response.body.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ""
+            try {
+              while (true) {
+                const { done, value } = await reader.read()
+                buffer += decoder.decode(value, { stream: !done })
+                let newline
+                while ((newline = buffer.indexOf("\n")) !== -1) {
+                  const frame = JSON.parse(buffer.slice(0, newline))
+                  buffer = buffer.slice(newline + 1)
+                  if (Array.isArray(frame.inputs)) await progress({ secretExecution: true, secretInputs: frame.inputs, revision: frame.revision })
+                  if (frame.result) content = JSON.stringify(frame.result)
+                }
+                if (done) break
+              }
+            } finally {
+              await reader.cancel().catch(() => {})
+              reader.releaseLock()
+            }
+          } else content = await response.text()`;
+
+// A chat message can arrive after the values were consumed. Execution
+// cancellation must not claim the user never supplied them.
+const SECRET_EXECUTION_CANCELLED = String.raw`
+          if ((args.action === "secret.run" || args.action === "run") && waitSignal.aborted) {
+            const data = { status: "cancelled", exitCode: null, stdout: "", stderr: "" }
+            await progress({ ok: true })
+            return { content: JSON.stringify({ schemaVersion: ${TOOL_SCHEMA_VERSION}, ok: true, action: args.action, data }), metadata: { openchamber: { schemaVersion: ${TOOL_SCHEMA_VERSION}, action: args.action, description: title, ok: true } } }
+          }`;
+
 const createToolEntry = ({ name, description, definitions, parameters, codeMode, answers = null }) => {
   const normalizeBooleans = booleanNormalizationBlock(parameters);
   const reviveDependsOn = dependsOnRevivalBlock(parameters);
   const actionSchema = definitions.length === 1 ? singleActionSchema(definitions[0]) : multiActionSchema(definitions);
+  const secret = name === 'openchamber_secret';
+  if (secret) {
+    actionSchema.required = [];
+    actionSchema.normalize = '        args.action ??= "secret.request"\n';
+  }
   return String.raw`    tools.add({
       name: ${JSON.stringify(name)},
       description: ${JSON.stringify(description)},
@@ -637,7 +719,7 @@ ${reviveDependsOn}${actionSchema.normalize}${normalizeBooleans}        const act
         }
 ${answers ? answerWaitSetup(answers.waitsWhen) : ''}
         try {
-          const response = await fetch(endpoint, {
+${secret ? SECRET_EXECUTION_PERMISSION : ''}          const response = await fetch(endpoint, {
             method: "POST",
             headers: {
               authorization: "Bearer " + token,
@@ -650,14 +732,14 @@ ${answers ? answerWaitSetup(answers.waitsWhen) : ''}
             body: JSON.stringify({ input: args, sessionID: context.sessionID, callID: context.id, tool: ${JSON.stringify(name)} }),
             signal: ${answers ? 'waitSignal' : 'context.signal'},${answers ? ANSWER_FETCH_TIMEOUT : ''}
           })
-          const content = await response.text()
+${secret ? SECRET_EXECUTION_RESPONSE : '          const content = await response.text()'}
           let result = null
           try { result = JSON.parse(content) } catch {}
           const valid = result?.schemaVersion === ${TOOL_SCHEMA_VERSION} && typeof result?.ok === "boolean" && typeof result?.action === "string"
           await progress({ ok: valid && result.ok === true })
           if (valid) return { content, metadata: { openchamber: { schemaVersion: ${TOOL_SCHEMA_VERSION}, action: args.action, description: title, ok: result.ok === true${answers ? ANSWER_METADATA : ''} } } }
           return failure({ schemaVersion: ${TOOL_SCHEMA_VERSION}, ok: false, action: args.action, error: { message: "OpenChamber returned an invalid response", kind: "runtime", status: response.status } })
-        } catch (error) {${answers ? answerClosedInChat(answers.closedInChatNote) : ''}
+        } catch (error) {${secret ? SECRET_EXECUTION_CANCELLED : ''}${answers ? answerClosedInChat(answers.closedInChatNote) : ''}
           return failure({ schemaVersion: ${TOOL_SCHEMA_VERSION}, ok: false, action: args.action, error: { message: error instanceof Error ? error.message : String(error), kind: "runtime" } })
         }${answers ? ANSWER_WAIT_RELEASE : ''}
       },
@@ -760,7 +842,7 @@ const createPluginSource = ({ includeControl, includeSchedule, includeWeb, inclu
       // Never behind Code Mode, like render: the chat draws the card from
       // this tool's own call, and the answer has to reach that call.
       codeMode: false,
-      answers: { waitsWhen: 'true', closedInChatNote: SECRET_REQUEST_CLOSED_IN_CHAT_NOTE },
+      answers: { waitsWhen: 'args.action !== "secrets.revoke" && args.action !== "revoke"', closedInChatNote: SECRET_REQUEST_CLOSED_IN_CHAT_NOTE },
     }));
   }
   if (includeImage) {
@@ -800,7 +882,12 @@ const createPluginSource = ({ includeControl, includeSchedule, includeWeb, inclu
   // included, to that proxy, and no per-request option turns that off. The
   // exemption is added inside the child because only there is the final
   // NO_PROXY, merged from the shell and server environments, visible.
-  return `const exemptCallbackFromProxy = () => {
+  return `${includeSecret ? `import { realpath } from "node:fs/promises"
+import { isAbsolute, relative, resolve } from "node:path"
+const isString = ${isString.toString()}
+const isRecord = ${isRecord.toString()}
+${normalizeSecretExecution.toString()}
+` : ''}const exemptCallbackFromProxy = () => {
   const endpoint = process.env.OPENCHAMBER_AGENT_TOOL_URL
   if (!endpoint || !URL.canParse(endpoint)) return
   const host = new URL(endpoint).hostname.replace(/^\\[|\\]$/g, "")
@@ -939,11 +1026,12 @@ export const createAgentToolRuntime = (dependencies) => {
     }
     try {
       // The calling session scopes browser actions to that session's page.
-      const contextSessionId = knowledgeAction ? sessionID : asNonEmptyString(payload.contextSessionId) ?? sessionID;
+      const contextSessionId = knowledgeAction || action === 'secret.run' || action === 'secrets.revoke' ? sessionID : asNonEmptyString(payload.contextSessionId) ?? sessionID;
       // The call id lets a page that waits for an answer be found again
       // when the user answers it.
       const contextCallId = asNonEmptyString(payload.callID);
       const actionOptions = { ...options };
+      if (action === 'secret.run') actionOptions.secretExecutionAuthorized = true;
       if (contextSessionId) actionOptions.contextSessionId = contextSessionId;
       if (contextCallId) actionOptions.contextCallId = contextCallId;
       const data = await executeAction(action, { ...payload.input, action }, contextDirectory, actionOptions);
@@ -999,10 +1087,23 @@ export const createAgentToolRuntime = (dependencies) => {
       req.once('aborted', abortOnDisconnect);
       res.once('close', abortOnDisconnect);
       const untrack = trackInflight(asNonEmptyString(req.body?.sessionID), controller);
+      const finish = (result) => res.headersSent
+        ? res.end(`${JSON.stringify({ result })}\n`)
+        : res.json(result);
       try {
-        return res.json(await execute(req.body, { signal: controller.signal }));
+        return finish(await execute(req.body, {
+          signal: controller.signal,
+          onSecretInputs: (inputs, revision) => {
+            if (controller.signal.aborted) return;
+            if (!res.headersSent) {
+              res.setHeader('Content-Type', 'application/x-ndjson');
+              res.setHeader('Cache-Control', 'no-store, no-transform');
+            }
+            res.write(`${JSON.stringify({ inputs, revision })}\n`);
+          },
+        }));
       } catch (error) {
-        return res.json(createResult({
+        return finish(createResult({
           ok: false,
           action: req.body?.input?.action,
           error: { message: error instanceof Error ? error.message : String(error), kind: 'runtime' },

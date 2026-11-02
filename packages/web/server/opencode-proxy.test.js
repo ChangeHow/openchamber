@@ -6,6 +6,8 @@ import express from 'express';
 import path from 'path';
 
 import { createSseBoundaryTracker, registerOpenCodeProxy, writeSseChunkWithBackpressure } from './lib/opencode/proxy.js';
+import { createSecretRequests } from './lib/openchamber-control/secret-request.js';
+import { registerOpenChamberControlRoutes } from './lib/openchamber-control/routes.js';
 
 const listen = (app, host = '127.0.0.1') => new Promise((resolve, reject) => {
   const server = app.listen(0, host, () => resolve(server));
@@ -885,6 +887,90 @@ describe('OpenCode proxy SSE forwarding', () => {
 
     const single = await (await fetch(`${base}/api/session/ses_1/message/msg_1`, { headers: asking })).json();
     expect(single).toEqual(message);
+  });
+
+  it.skipIf(process.platform === 'win32')('restores a waiting secret on late message reads and closes its fields after another client submits', async () => {
+    const message = { id: 'msg_1', type: 'assistant', content: [{
+      type: 'tool', id: 'call_1', name: 'openchamber_secret',
+      state: { status: 'running', input: { action: 'secret.run' }, metadata: {} },
+    }] };
+    const upstream = express();
+    let holdMessage = false;
+    let heldResponse;
+    let readStarted;
+    const upstreamRead = new Promise((resolve) => { readStarted = resolve; });
+    const messagePage = { data: [message], cursor: { next: 'older' } };
+    upstream.get('/api/session/ses_1/message', (_req, res) => {
+      if (!holdMessage) return res.json(messagePage);
+      heldResponse = res;
+      readStarted();
+    });
+    upstreamServer = await listen(upstream);
+    const upstreamPort = upstreamServer.address().port;
+    const externalBaseUrl = `http://127.0.0.1:${upstreamPort}`;
+    let cardReady;
+    let executionReady;
+    const card = new Promise((resolve) => { cardReady = resolve; });
+    const executing = new Promise((resolve) => { executionReady = resolve; });
+    const secrets = createSecretRequests({
+      isEnabled: async () => true,
+      onWaitChange: (change) => { if (change.type === 'waiting') cardReady(); },
+    });
+    const app = express();
+    registerOpenChamberControlRoutes(app, { controlService: { answerSecret: secrets.answer } });
+    registerOpenCodeProxy(app, {
+      fs: { promises: { realpath: async (value) => value } },
+      OPEN_CODE_READY_GRACE_MS: 0,
+      getRuntime: () => ({ openCodePort: upstreamPort, openCodeBaseUrl: externalBaseUrl, isOpenCodeReady: true }),
+      getOpenCodeAuthHeaders: () => ({}),
+      buildOpenCodeUrl: (requestPath) => `${externalBaseUrl}${requestPath}`,
+      ensureOpenCodeApiPrefix: () => {},
+      getMessageProgress: secrets.messageProgress,
+    });
+    proxyServer = await listen(app);
+    const base = `http://127.0.0.1:${proxyServer.address().port}`;
+    const read = async (headers) => (await fetch(`${base}/api/session/ses_1/message`, { headers })).json();
+    expect((await read()).data[0].content[0].state.metadata).toEqual({});
+    holdMessage = true;
+    const opening = read();
+    await upstreamRead;
+
+    const controller = new AbortController();
+    const inputs = [{ env: 'PASSWORD', label: 'Password', reuse: true }, { env: 'OTP', label: 'Code' }];
+    const pending = secrets.run({
+      program: process.execPath, args: ['-e', 'setTimeout(() => {}, 30000)'], inputs,
+    }, {
+      sessionId: 'ses_1', callId: 'call_1', directory: process.cwd(),
+      signal: controller.signal,
+      onInputs: (fields) => { if (!fields.length) executionReady(); },
+    });
+    try {
+      await card;
+      holdMessage = false;
+      heldResponse.json(messagePage);
+      const late = await opening;
+      expect(late.cursor).toEqual({ next: 'older' });
+      expect(late.data[0].content[0].state.metadata.openchamber_secret).toEqual({
+        secretExecution: true, secretInputs: [{ env: 'PASSWORD', label: 'Password' }, { env: 'OTP', label: 'Code' }], revision: 1,
+      });
+      expect(await read({ 'x-openchamber-part-shells': 'v1' })).toEqual(late);
+      expect(secrets.messageProgress('another-session')).toBeNull();
+
+      const values = { PASSWORD: 'synthetic-snapshot-password', OTP: 'synthetic-snapshot-code' };
+      const response = await fetch(`${base}/api/openchamber/secret/answer`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId: 'ses_1', callId: 'call_1', values }),
+      });
+      expect(response.status).toBe(200);
+      await executing;
+      const after = await read();
+      expect(after.data[0].content[0].state.metadata.openchamber_secret).toEqual({ secretExecution: true, secretInputs: [], revision: 2 });
+      for (const value of Object.values(values)) expect(JSON.stringify(after)).not.toContain(value);
+    } finally {
+      controller.abort();
+      await pending;
+    }
+    expect(secrets.messageProgress('ses_1')).toBeNull();
   });
 
   it('folds OpenChamber-owned archive state and metadata onto sessions it serves', async () => {

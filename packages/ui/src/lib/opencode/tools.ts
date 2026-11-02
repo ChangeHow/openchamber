@@ -20,7 +20,7 @@
 
 import { z } from "zod"
 
-import type { JsonValue, Metadata, ToolInput, ToolState } from "./model"
+import type { JsonValue, Metadata, ToolInput, ToolPart, ToolState } from "./model"
 
 /** Built-in tool names as the server reports them. */
 export const OPENCODE_TOOLS = {
@@ -427,6 +427,11 @@ export function renderedPage(
   return { ...page, title, ask: { kind: "show" } }
 }
 
+const secretBindingsSchema = z.array(z.object({
+  env: z.string().regex(/^(?!__proto__$)[A-Za-z_][A-Za-z0-9_]*$/),
+  label: z.string().trim().min(1).max(120),
+})).min(1).max(8).refine((inputs) => new Set(inputs.map((input) => input.env)).size === inputs.length)
+
 const secretRequestFields = z.object({
   label: optionalText,
   reason: optionalText,
@@ -435,17 +440,18 @@ const secretRequestFields = z.object({
 
 // Read like a page's input: inside `parameters` or beside `action`.
 const secretRequestInputSchema = secretRequestFields
-  .extend({ parameters: secretRequestFields.optional().catch(undefined) })
+  .extend({ action: optionalText, parameters: secretRequestFields.optional().catch(undefined) })
   .catch({})
 
 /** Where a secret request stands. `not-given`: the user wrote in the chat, or the turn ended first. */
-export type SecretRequestState = "waiting" | "saved" | "declined" | "not-given"
+export type SecretRequestState = "waiting" | "saved" | "declined" | "not-given" | "submitted"
 
 // How a secret request ended, as the plugin records it in the call's metadata:
 // the server's status, or the plugin's own answer when the user wrote in the
 // chat. The file path the agent got is not needed here.
 const secretResultSchema = z
   .object({
+    openchamber_secret: z.object({ secretExecution: z.boolean().optional(), secretInputs: secretBindingsSchema.optional().catch(undefined), revision: z.number().int().nonnegative().optional().catch(undefined) }).optional().catch(undefined),
     openchamber: z.object({
       ok: z.boolean().optional().catch(undefined),
       answer: z.union([
@@ -456,7 +462,22 @@ const secretResultSchema = z
   })
   .catch({})
 
-export type RequestedSecret = { label: string; reason: string; placeholder: string | undefined; state: SecretRequestState }
+/** Snapshots and live events share the execution's monotonic revision. */
+export function withNewerSecretProgress(existing: ToolPart, incoming: ToolPart): ToolPart {
+  if (existing.tool !== OPENCHAMBER_SECRET_TOOL || incoming.tool !== OPENCHAMBER_SECRET_TOOL
+    || existing.state.status !== "running") return incoming
+  const previous = existing.state.metadata?.openchamber_secret
+  if (previous === undefined) return incoming
+  const current = secretResultSchema.parse(existing.state.metadata ?? {}).openchamber_secret
+  if (current?.revision === undefined) return incoming
+  if (incoming.state.status === "pending") return existing
+  if (incoming.state.status !== "running") return incoming
+  const next = secretResultSchema.parse(incoming.state.metadata ?? {}).openchamber_secret
+  if (next?.revision !== undefined && current.revision <= next.revision) return incoming
+  return { ...incoming, state: { ...incoming.state, metadata: { ...incoming.state.metadata, openchamber_secret: previous } } }
+}
+
+export type RequestedSecret = { label: string; reason: string; placeholder: string | undefined; state: SecretRequestState; inputs?: Array<{ env: string; label: string }> }
 
 /**
  * The card an `openchamber_secret` call asks on. A call the server refused
@@ -465,6 +486,15 @@ export type RequestedSecret = { label: string; reason: string; placeholder: stri
 export function requestedSecret(toolName: ToolName, state: ToolState): RequestedSecret | null {
   if (toolName !== OPENCHAMBER_SECRET_TOOL) return null
   const parsed = secretRequestInputSchema.parse(state.input ?? {})
+  if (parsed.action === "secret.run" || parsed.action === "run") {
+    if (state.status !== "running") return null
+    const execution = secretResultSchema.parse(state.metadata ?? {}).openchamber_secret
+    const inputs = execution?.secretInputs
+    // Running input is visible before permissions are granted. Only the
+    // server's post-assertion missing-input progress allows a card to collect values.
+    if (!inputs || execution?.secretExecution !== true) return null
+    return { label: inputs[0].label, reason: "", placeholder: undefined, inputs, state: "waiting" }
+  }
   const label = parsed.parameters?.label ?? parsed.label
   const reason = parsed.parameters?.reason ?? parsed.reason
   if (!label || !reason) return null
@@ -641,11 +671,17 @@ export function mcpToolServer(toolName: ToolName, servers: readonly string[]): s
 }
 
 /** `null` for every tool that is not OpenChamber's own. */
-export function openChamberToolCall(toolName: ToolName, input: JsonValue | undefined): OpenChamberToolCall | null {
+export function openChamberToolCall(toolName: ToolName, input: JsonValue | undefined, metadata?: Metadata): OpenChamberToolCall | null {
   const tool = normalizeToolName(toolName)
   if (!OPENCHAMBER_TOOLS.has(tool)) return null
   const parsed = openChamberCallSchema.parse(input ?? {})
-  const awaitsAnswer = tool === OPENCHAMBER_SECRET_TOOL || (parsed.parameters?.awaitAnswer ?? parsed.awaitAnswer) === true
+  let awaitsAnswer = (parsed.parameters?.awaitAnswer ?? parsed.awaitAnswer) === true
+  if (tool === OPENCHAMBER_SECRET_TOOL) {
+    if (parsed.action === "secret.run" || parsed.action === "run") {
+      const execution = secretResultSchema.parse(metadata ?? {}).openchamber_secret
+      awaitsAnswer = execution?.secretExecution === true && !!execution.secretInputs?.length
+    } else awaitsAnswer = parsed.action !== "secrets.revoke" && parsed.action !== "revoke"
+  }
   return { tool, action: parsed.action, awaitsAnswer }
 }
 

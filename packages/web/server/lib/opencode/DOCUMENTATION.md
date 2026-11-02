@@ -107,6 +107,10 @@ in that user's sessions. On the fallback path the same rules are merged into
   JSON includes and token references stay inside the package. Each failed variant
   is reported separately so valid siblings remain available. No extension code runs.
 - `packages/web/server/lib/opencode/proxy.js`: OpenCode API/SSE forwarding and readiness-gate route registration.
+  Message-page reads can restore host-owned transient tool progress through
+  `getMessageProgress`, supplied by `secret-request.js`. The restoration uses
+  current state after the upstream read, preserves pagination, and does not
+  add requests, polling or private values. Finished-result shells stay opt-in.
 - `packages/web/server/lib/opencode/session-runtime.js`: session status/activity runtime for OpenCode SSE events.
 - `packages/web/server/lib/opencode/watcher.js`: global SSE watcher runtime for push/session event fanout.
 - `packages/web/server/lib/opencode/shared.js`: shared utilities for config, markdown, skills, and git helpers.

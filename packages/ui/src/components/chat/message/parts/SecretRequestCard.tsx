@@ -11,45 +11,51 @@ import type { RequestedSecret, SecretRequestState } from '@/lib/opencode/tools';
 import { answerSecretRequest } from '@/lib/secretRequestAnswer';
 import { useSessionDirectory } from '@/sync/sync-context';
 
-/**
- * The card an agent asks for a secret on (`openchamber_secret`). The value
- * goes straight to the server, which writes it to a private file; the call,
- * the transcript and the agent's context only ever see the file's path. Once
- * answered, the card folds to one line.
- */
+/** Private values stay in this card until one direct submission to the server. */
 export function SecretRequestCard({ part, request }: { part: ToolPart; request: RequestedSecret }) {
     const { t } = useI18n();
     const directory = useSessionDirectory(part.sessionID);
     const [value, setValue] = React.useState('');
+    const [values, setValues] = React.useState(() => new Map<string, string>());
+    const execution = request.inputs !== undefined;
+    const complete = request.inputs ? request.inputs.every((input) => {
+        const value = values.get(input.env);
+        return !!value?.trim() && !value.includes('\0');
+    }) : !!value.trim();
     const [busy, setBusy] = React.useState(false);
     // What this client sent, shown until the call completes with the status
     // OpenCode stores.
-    const [sent, setSent] = React.useState<SecretRequestState | null>(null);
-    const state = request.state === 'waiting' && sent ? sent : request.state;
+    const inputKey = request.inputs?.map((input) => input.env).join('\0');
+    const [sent, setSent] = React.useState<{ state: SecretRequestState; inputKey: string | undefined } | null>(null);
+    const state = request.state === 'waiting' && sent && sent.inputKey === inputKey ? sent.state : request.state;
 
-    const send = React.useCallback(async (answer: { value: string } | { declined: true }, outcome: SecretRequestState) => {
+    const send = React.useCallback(async (answer: { value: string } | { values: Record<string, string> } | { declined: true }, outcome: SecretRequestState) => {
         setBusy(true);
         try {
             await answerSecretRequest({ sessionId: part.sessionID, callId: part.callID, ...answer }, directory);
             setValue('');
-            setSent(outcome);
+            setValues(new Map());
+            setSent({ state: outcome, inputKey });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            toast.error(t('chat.secretRequest.saveFailed'), { description: message });
+            toast.error(t(execution ? 'chat.secretRequest.submitFailed' : 'chat.secretRequest.saveFailed'), { description: message });
         } finally {
             setBusy(false);
         }
-    }, [directory, part.callID, part.sessionID, t]);
+    }, [directory, execution, inputKey, part.callID, part.sessionID, t]);
 
     // The chat brings a card that waits into view, like a page that waits.
     const waiting = state === 'waiting';
     const blockRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
         if (waiting) dispatchPageWaiting(blockRef.current);
+        else { setValue(''); setValues(new Map()); }
     }, [waiting]);
 
     if (!waiting) {
-        const line = state === 'saved'
+        const line = state === 'submitted'
+            ? t('chat.secretRequest.submitted')
+            : state === 'saved'
             ? t('chat.secretRequest.saved', { label: request.label })
             : state === 'declined'
                 ? t('chat.secretRequest.declined', { label: request.label })
@@ -64,16 +70,31 @@ export function SecretRequestCard({ part, request }: { part: ToolPart; request: 
 
     return (
         <div ref={blockRef} className="oc-tile my-2 rounded-xl p-4" data-secret-request-status="waiting" data-waiting-page={part.id}>
-            <div className="typography-ui-label font-semibold text-foreground">{request.label}</div>
-            <p className="mt-1 whitespace-pre-wrap break-words typography-markdown text-muted-foreground">{request.reason}</p>
+            <div className="typography-ui-label font-semibold text-foreground">{execution ? t('chat.secretRequest.executionTitle') : request.label}</div>
+            {request.reason && <p className="mt-1 whitespace-pre-wrap break-words typography-markdown text-muted-foreground">{request.reason}</p>}
             <form
-                className="mt-3 flex items-center gap-2"
+                className={execution ? "mt-3 flex flex-col gap-3" : "mt-3 flex items-center gap-2"}
                 onSubmit={(event) => {
                     event.preventDefault();
-                    if (value.trim() && !busy) void send({ value }, 'saved');
+                    if (complete && !busy) void send(request.inputs ? { values: Object.fromEntries([...values].filter(([env]) => request.inputs?.some((input) => input.env === env))) } : { value }, execution ? 'submitted' : 'saved');
                 }}
             >
-                <Input
+                {request.inputs ? request.inputs.map((input) => (
+                    <label key={input.env} className="flex w-full flex-col gap-1 typography-ui-label">
+                        <span dir="auto">{input.label}</span>
+                        <Input
+                            type="password"
+                            value={values.get(input.env) ?? ''}
+                            onChange={(event) => setValues((current) => new Map(current).set(input.env, event.target.value))}
+                            autoComplete="off"
+                            data-1p-ignore
+                            data-lpignore="true"
+                            data-bwignore
+                            maxLength={16000}
+                            disabled={busy}
+                        />
+                    </label>
+                )) : <Input
                     type="password"
                     value={value}
                     onChange={(event) => setValue(event.target.value)}
@@ -86,12 +107,12 @@ export function SecretRequestCard({ part, request }: { part: ToolPart; request: 
                     data-bwignore
                     disabled={busy}
                     className="flex-1"
-                />
-                <Button type="submit" disabled={busy || !value.trim()}>{t('chat.secretRequest.save')}</Button>
+                />}
+                <Button type="submit" className={execution ? 'self-start' : undefined} disabled={busy || !complete}>{t(execution ? 'chat.secretRequest.run' : 'chat.secretRequest.save')}</Button>
             </form>
             <div className="mt-2 flex items-center gap-1.5 typography-meta text-muted-foreground">
                 <Icon name="shield-check" className="size-3.5 shrink-0" />
-                <span className="min-w-0 flex-1">{t('chat.secretRequest.privacy')}</span>
+                <span className="min-w-0 flex-1">{t(execution ? 'chat.secretRequest.executionPrivacy' : 'chat.secretRequest.privacy')}</span>
                 <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void send({ declined: true }, 'declined')}>
                     {t('chat.secretRequest.decline')}
                 </Button>

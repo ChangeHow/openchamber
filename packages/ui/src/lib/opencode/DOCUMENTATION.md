@@ -24,6 +24,17 @@ to the shared UI domain model. Sync owns transcript membership and store writes.
   An agent missing from it throws `AgentUnavailableError` before any switch,
   the model included. A failed or empty list lets the switch through.
 
+- Execution secret cards read only the server's current `secretInputs` progress
+  metadata after permission assertions. Original call bindings are not a
+  request to collect every value: some may be leased. An empty list draws no
+  card, and later progress can request an expired binding. Metadata contains
+  only public env names and labels. The running status uses that same list to
+  distinguish input waits from leased execution; revocation never waits.
+- Running message snapshots recover the same public fields from the server's
+  execution registry. `withNewerSecretProgress` keeps the per-call revision in
+  materialization and event reduction, including replayed starts, so old updates
+  cannot reopen submitted fields. Input drafts stay local to each card.
+
 ## Decisions
 
 ### Why a missing agent stops the send instead of being skipped

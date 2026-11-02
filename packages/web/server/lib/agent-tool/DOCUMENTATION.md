@@ -77,18 +77,48 @@ the user can want independently:
   the control service refuses the action when it is not. Never behind Code
   Mode, like render: the chat draws the images in place of the call's row from
   its stored result, which an `execute` script would hide.
-- `openchamber_secret` — `secret.request`, a card in the chat where the user
-  types a secret the agent asked for (`label`, `reason`, optional
-  `placeholder`). Every call waits, with the same plugin machinery as a page
+- `openchamber_secret` — `secret.request`, `secret.run` and `secrets.revoke`, a card where the user
+  types private inputs. File mode takes `label`, `reason` and optional
+  `placeholder`. Requests that need input wait, with the same plugin machinery as a page
   with `awaitAnswer` (call id, `timeout: false`, the `session.prompt` hook
   that ends the wait when the user writes in the chat, and the inbox check
   for a message sent before the card appeared). The value never
-  travels through the call: the chat posts it to the server, which writes it
+  travels through the call: in file mode the chat posts it to the server, which writes it
   to a private file, and the call returns only `{ status, file }`
   (`../openchamber-control/secret-request.js`). Direct, never behind Code
   Mode, because the chat draws the card from the call. On by default:
   enabled while `agentSecretToolEnabled` is not `false`, and the control
   service refuses the action when it is, so a stale plugin cannot keep asking.
+  `secret.run` adds one-shot private environment inputs. The plugin normalizes
+  the public command, resolves the working directory with `realpath`, asserts
+  `external_directory` if outside the location and then `shell` on a fully
+  quoted `cd ... && env ... program args` display. No implicit shell runs.
+  The quoting cannot be broken out of, but the display can still mislead:
+  bidirectional control characters (U+202E and friends) in an argument or
+  public env value render reordered in the approval prompt, the same caveat
+  as OpenCode's own shell permission.
+  A missing `ctx.permission.assert` refuses execution mode. Only after approval
+  does the normalized request reach the server, with the same wait and
+  cancellation machinery. The callback uses private NDJSON progress frames for
+  execution mode: `{ inputs, revision }` carries only the currently missing public
+  bindings and their per-call revision, and `{ result }` carries the final versioned envelope. The plugin
+  forwards inputs as `secretExecution: true, secretInputs, revision` metadata; the UI
+  draws those fields only. An empty array hides the card for a fully leased
+  run or after all fields are satisfied. Later frames can ask for bindings
+  whose leases expired while another field waited. The stream stays on the
+  same authenticated same-machine callback and is never a new UI transport.
+  Results contain status, exit code, redacted output and optional aggregate
+  `reused` env names, with no answer metadata or secret values.
+  `inputs[].reuse` opts a long-lived credential into the calling session's
+  lease; `inputs[].refresh` asks for a fresh value. OTPs and credentials the
+  user said not to remember must keep reuse off. The lease lifetime and
+  revocation invariants belong to `../openchamber-control/DOCUMENTATION.md`.
+  Every reused run still executes both applicable permission assertions.
+  `secrets.revoke` clears the calling session's leases when the user asks to
+  forget them or the task is done.
+  Normalization is embedded from the server's function with explicit Node path
+  primitives, so both sides validate the same public command without third-party
+  imports from the materialized directory.
 - `openchamber_workflow` — `workflow.*`, scripts that fan a large task out to
   many agents, run by OpenChamber (`../workflows/DOCUMENTATION.md`). Off by
   default: enabled only while `agentWorkflowToolEnabled` is `true`, and the
@@ -377,3 +407,30 @@ tool fails rather than driving the browser. An unresolvable action answers with
 the actions that tool actually has, because an error that only says
 "unsupported" leaves the model to guess a second wrong name — which is exactly
 what happened before this existed.
+
+### Why execution reuses the secret card
+
+The card already provides direct private submission, decline and the waiting
+notification across server-backed clients. Execution mode renders one password
+field per public binding and submits them together through the same answer
+route, avoiding a second secret transport. The card clears local input state
+on successful submission; the completed call shows its redacted execution
+result through the ordinary tool renderer. File-mode calls keep their existing
+card and result.
+
+### Why execution permission belongs to the plugin
+
+OpenCode owns the session's permission rules and tool source identity. The
+server cannot assert those through its generic CLI/control entry, so execution
+is accepted only from the authenticated managed-plugin adapter after the
+plugin's assertions. This is resource-based shell authorization, without the
+native shell tool's AST analysis, and provides no sandbox for scripts, file
+access or network operations.
+
+### Why missing inputs come from the execution callback
+
+The server owns lease expiry and revocation. Rendering the original tool
+inputs would ask again for valid leased bindings, while a separate preflight
+could become stale before execution. Public progress on the existing callback
+keeps the card aligned with the actual waiting call, including expiry while
+another field waits. Secret values still go directly from card to answer route.

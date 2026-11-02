@@ -93,8 +93,9 @@ other.
   against `budgetMB` when the budget cut it) and a note telling the agent to
   split the page or use smaller images. A page whose images all show answers
   as before.
-- `secret-request.js` runs `secret.request` for the `openchamber_secret`
-  agent tool. The call waits in its own `createPageAnswers` instance, so the
+- `secret-request.js` owns file requests and in-memory execution handoff for
+  the `openchamber_secret` agent tool. `secret.request` retains its file contract.
+  The call waits in its own `createPageAnswers` instance, so the
   session shows as waiting for the user exactly like a page (pending list,
   `openchamber:page-waiting` with the label as title, "Input needed"), while
   a page's answer route can never reach a secret's wait. The chat answers
@@ -112,6 +113,62 @@ other.
   card says the agent's commands can read it. `createSecretFiles().sweep()`
   deletes files 24 hours after they were written, on server start and
   hourly. Answers `403` while `agentSecretToolEnabled` is `false`.
+- `secret.run` accepts an absolute `program`, public `args` and `env`, 1 to 8
+  unique private environment bindings with short labels, an optional `workdir`
+  and `timeoutMs`. Each binding may opt into `reuse: true`; `refresh: true`
+  forces a new card value for that binding. Only the authenticated managed-plugin
+  adapter may enter it; the generic control route cannot grant execution permission. The plugin
+  asserts `external_directory` when needed, then `shell`, before enabling the
+  card. The canonical working directory and public command approved there are
+  the ones executed here.
+  The server resolves reusable bindings by the calling session and exact env
+  name after authorization. A fully leased run shows no card; a mixed run asks
+  only for missing fields. The answer route receives all currently requested
+  `values` together. Missing, empty, NUL-containing or unknown fields release
+  nothing. Leases are rechecked after each answer, so expiry or revocation while
+  another field waits causes a new request for the missing binding before spawn.
+  One-shot values stay call-local. Page answers and wait events carry only a
+  submission marker. Decline or abort before submission starts no process;
+  stale answers are refused. No execution answer enters `createSecretFiles`.
+  `messageProgress(sessionId)` restores public missing fields and a per-call
+  revision onto running message pages after the upstream response arrives.
+  This recovers late clients through existing reads without polling. Snapshots
+  never serialize private entries or drafts; live and snapshot revisions agree.
+- `secret-leases.js` owns process-local, session-scoped credential leases.
+  Only submitted `reuse: true` bindings are retained; OTPs must use the default
+  `reuse: false`. Each entry's deadline is issuance plus 10 minutes, truncated
+  by its session window's deadline, with no extension on use. The injected
+  lifetime is capped at 30 minutes. All entries
+  in a session's lease window expire no later than 30 minutes after its first
+  reusable submission, including refreshed or newly added bindings. After that
+  window expires, a fresh user submission can establish another window; old
+  values cannot renew themselves. Expiry is checked on access and swept every
+  minute by an unref'd server timer. Server restart clears every lease.
+  `secrets.revoke` clears all leases for the calling session, with no target
+  session parameter and no values in its response. It remains available for
+  cleanup when the secret tool is disabled. It does not undo or cancel an
+  already spawned process. Failed or cancelled runs preserve existing leases;
+  turn end does not revoke them. Results may list `reused` env names only.
+- `secret-execution.js` owns input normalization and the POSIX process runner.
+  The server spawns once, as its own user, with `shell: false`, a detached
+  process group, a small inherited environment allowlist and explicit public
+  and private bindings. It never changes the parent's environment. The timer
+  starts at spawn, defaults to 120000 ms and is capped at 600000 ms. Output is
+  buffered in memory and redacted with longest-first complete literal matching
+  before returning `{ status, exitCode, stdout, stderr }`. Over 1 MiB combined
+  output kills the group and discards all output, including secret prefixes.
+  Cancellation, timeout and leader exit kill the group and clean listeners.
+  A descendant that left the process group (`setsid` and friends) can keep
+  the pipes open, so a short grace period after the kill force-settles the
+  run and destroys the streams; the call never hangs on it.
+  macOS and Linux are supported; Windows execution mode is refused before
+  collecting inputs because process-group termination requires POSIX.
+  This is trusted local execution, inside the enterprise boundary like terminal
+  and exec, with no new listener or app-owned egress. The consumer and its
+  descendants can access the values and perform external effects. Cancellation
+  cannot undo those effects or guarantee remote jobs stop. Encoded, transformed
+  or deliberately fragmented secrets are outside literal redaction. JavaScript
+  cannot guarantee memory zeroing. Remote clients need authenticated HTTPS.
 - `routes.js` is the authenticated CLI HTTP adapter. It forwards one action,
   preserves service status and partial-result details, and propagates request
   cancellation. It also carries the chat's answer to a waiting page.
@@ -377,3 +434,25 @@ them, where it says who sent which message.
 The existing `openchamber:chats` id lets agents choose from `projects.list`
 without changing the current-directory default or treating a reserved word as
 a filesystem path. Chats remains outside the registered project list on disk.
+
+### Why execution inputs have an in-memory handoff
+
+The existing file mode deliberately retains a credential for 24 hours.
+Execution answers stay in memory and never travel through file storage, tool
+metadata or OpenCode's transcript. Only public bindings and the redacted
+process result cross the tool callback.
+
+### Why credential leases stay in session memory with short issuance deadlines
+
+Script fixes often need the same password again. An opt-in 10-minute lease
+allows those retries without another password entry. A persisted store would
+retain credentials across restarts and broaden their ownership; a longer or
+sliding TTL would let agent activity retain them indefinitely. Session scoping
+and the 30-minute absolute window bound that exposure. Explicit fresh input
+can begin a new window after expiry.
+
+### Why credential reuse never reuses authorization
+
+A retry can run a different program or directory. Every invocation therefore
+runs the plugin's external-directory and shell assertions on its actual command
+before lease lookup. A remembered credential grants no command permission.
