@@ -20,7 +20,7 @@ export function SecretRequestCard({ part, request }: { part: ToolPart; request: 
     const execution = request.inputs !== undefined;
     const complete = request.inputs ? request.inputs.every((input) => {
         const value = values.get(input.env);
-        return !!value && !value.includes('\0');
+        return !!value?.trim() && !value.includes('\0');
     }) : !!value.trim();
     const [busy, setBusy] = React.useState(false);
     // What this client sent, shown until the call completes with the status

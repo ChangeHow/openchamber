@@ -109,4 +109,33 @@ describe.skipIf(process.platform === 'win32')('private-input execution', () => {
       await new Promise((resolve) => server.close(resolve));
     }
   });
+
+  it('settles when a descendant escaped the process group', async () => {
+    // The detached grandchild becomes its own process-group leader, so the
+    // group kill cannot reach it, and it holds the inherited pipes: only the
+    // grace settle after the kill can finish the run. Readiness arrives over
+    // a socket so the escape is proven before the leader exits.
+    let ready;
+    const connected = new Promise((resolve) => { ready = resolve; });
+    const server = createServer((socket) => socket.once('data', () => ready()));
+    await new Promise((resolve) => server.listen(0, 'localhost', resolve));
+    const port = server.address().port;
+    const controller = new AbortController();
+    const request = normalize({ timeoutMs: 100, args: ['-e', `
+      require('node:child_process').spawn(process.execPath, ['-e',
+        "const socket = require('node:net').connect(${port}, 'localhost', () => socket.write('ready')); setTimeout(() => process.exit(0), 8000); setInterval(() => {}, 1000);"],
+        { detached: true, stdio: 'inherit' });
+      process.exit(0);
+    `] });
+    try {
+      // Before the grace settle this promise never resolved: the escaped
+      // descendant kept the pipes open after the leader and group died.
+      expect(await runSecret(request, { PASSWORD: 'password', OTP: 'code' }, controller.signal))
+        .toEqual({ status: 'timeout', exitCode: 0, stdout: '', stderr: '' });
+      expect(getEventListeners(controller.signal, 'abort')).toEqual([]);
+    } finally {
+      controller.abort();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
 });
