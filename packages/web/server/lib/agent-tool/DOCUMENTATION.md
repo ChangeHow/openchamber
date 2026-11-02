@@ -77,9 +77,9 @@ the user can want independently:
   the control service refuses the action when it is not. Never behind Code
   Mode, like render: the chat draws the images in place of the call's row from
   its stored result, which an `execute` script would hide.
-- `openchamber_secret` — `secret.request` and `secret.run`, a card where the user
+- `openchamber_secret` — `secret.request`, `secret.run` and `secrets.revoke`, a card where the user
   types private inputs. File mode takes `label`, `reason` and optional
-  `placeholder`. Every call waits, with the same plugin machinery as a page
+  `placeholder`. Requests that need input wait, with the same plugin machinery as a page
   with `awaitAnswer` (call id, `timeout: false`, the `session.prompt` hook
   that ends the wait when the user writes in the chat, and the inbox check
   for a message sent before the card appeared). The value never
@@ -94,10 +94,24 @@ the user can want independently:
   `external_directory` if outside the location and then `shell` on a fully
   quoted `cd ... && env ... program args` display. No implicit shell runs.
   A missing `ctx.permission.assert` refuses execution mode. Only after approval
-  does progress carry `secretExecution: true`, which allows the UI to draw the
-  fields; entering values never grants permission. The normalized request is
-  sent to the server with the same wait and cancellation machinery. Results
-  contain only status, exit code and redacted output, with no answer metadata.
+  does the normalized request reach the server, with the same wait and
+  cancellation machinery. The callback uses private NDJSON progress frames for
+  execution mode: `{ inputs }` carries only the currently missing public
+  bindings, and `{ result }` carries the final versioned envelope. The plugin
+  forwards inputs as `secretExecution: true, secretInputs` metadata; the UI
+  draws those fields only. An empty array hides the card for a fully leased
+  run or after all fields are satisfied. Later frames can ask for bindings
+  whose leases expired while another field waited. The stream stays on the
+  same authenticated same-machine callback and is never a new UI transport.
+  Results contain status, exit code, redacted output and optional aggregate
+  `reused` env names, with no answer metadata or secret values.
+  `inputs[].reuse` opts a long-lived credential into the calling session's
+  lease; `inputs[].refresh` asks for a fresh value. OTPs and credentials the
+  user said not to remember must keep reuse off. The lease lifetime and
+  revocation invariants belong to `../openchamber-control/DOCUMENTATION.md`.
+  Every reused run still executes both applicable permission assertions.
+  `secrets.revoke` clears the calling session's leases when the user asks to
+  forget them or the task is done.
   Normalization is embedded from the server's function with explicit Node path
   primitives, so both sides validate the same public command without third-party
   imports from the materialized directory.
@@ -408,3 +422,11 @@ is accepted only from the authenticated managed-plugin adapter after the
 plugin's assertions. This is resource-based shell authorization, without the
 native shell tool's AST analysis, and provides no sandbox for scripts, file
 access or network operations.
+
+### Why missing inputs come from the execution callback
+
+The server owns lease expiry and revocation. Rendering the original tool
+inputs would ask again for valid leased bindings, while a separate preflight
+could become stale before execution. Public progress on the existing callback
+keeps the card aligned with the actual waiting call, including expiry while
+another field waits. Secret values still go directly from card to answer route.

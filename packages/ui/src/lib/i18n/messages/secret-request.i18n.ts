@@ -3,7 +3,7 @@ export const secretRequestI18n = {
   en: {
     "chat.secretRequest.executionTitle": "Private inputs",
     "chat.secretRequest.run": "Submit and run",
-    "chat.secretRequest.executionPrivacy": "Passed to this run in memory, kept out of the chat",
+    "chat.secretRequest.executionPrivacy": "Kept out of the chat. Reusable credentials stay in this session's server memory for up to 10 minutes. Restarting the server clears them.",
     "chat.secretRequest.submitted": "Private inputs submitted",
     "chat.secretRequest.submitFailed": "Private inputs were not submitted",
     'chat.secretRequest.inputLabel': 'Secret value',
@@ -23,7 +23,7 @@ export const secretRequestI18n = {
   nl: {
     "chat.secretRequest.executionTitle": "Privé-invoer",
     "chat.secretRequest.run": "Versturen en uitvoeren",
-    "chat.secretRequest.executionPrivacy": "In het geheugen aan deze uitvoering doorgegeven, buiten de chat gehouden",
+    "chat.secretRequest.executionPrivacy": "Buiten de chat gehouden. Herbruikbare inloggegevens blijven maximaal 10 minuten in het servergeheugen van deze sessie. Een herstart wist ze.",
     "chat.secretRequest.submitted": "Privé-invoer verstuurd",
     "chat.secretRequest.submitFailed": "Privé-invoer is niet verstuurd",
     'chat.secretRequest.inputLabel': 'Waarde van het geheim',
@@ -43,7 +43,7 @@ export const secretRequestI18n = {
   de: {
     "chat.secretRequest.executionTitle": "Private Eingaben",
     "chat.secretRequest.run": "Senden und ausführen",
-    "chat.secretRequest.executionPrivacy": "Im Speicher an diesen Lauf übergeben, außerhalb des Chats",
+    "chat.secretRequest.executionPrivacy": "Bleibt außerhalb des Chats. Wiederverwendbare Zugangsdaten bleiben bis zu 10 Minuten im Serverspeicher dieser Sitzung. Ein Serverneustart löscht sie.",
     "chat.secretRequest.submitted": "Private Eingaben gesendet",
     "chat.secretRequest.submitFailed": "Private Eingaben wurden nicht gesendet",
     'chat.secretRequest.inputLabel': 'Wert des Geheimnisses',
@@ -63,7 +63,7 @@ export const secretRequestI18n = {
   es: {
     "chat.secretRequest.executionTitle": "Datos privados",
     "chat.secretRequest.run": "Enviar y ejecutar",
-    "chat.secretRequest.executionPrivacy": "Se pasan en memoria a esta ejecución y quedan fuera del chat",
+    "chat.secretRequest.executionPrivacy": "Quedan fuera del chat. Las credenciales reutilizables permanecen hasta 10 minutos en la memoria del servidor de esta sesión. Reiniciar el servidor las borra.",
     "chat.secretRequest.submitted": "Datos privados enviados",
     "chat.secretRequest.submitFailed": "No se enviaron los datos privados",
     'chat.secretRequest.inputLabel': 'Valor del secreto',
@@ -83,7 +83,7 @@ export const secretRequestI18n = {
   fr: {
     "chat.secretRequest.executionTitle": "Données privées",
     "chat.secretRequest.run": "Envoyer et exécuter",
-    "chat.secretRequest.executionPrivacy": "Transmises en mémoire à cette exécution, hors du chat",
+    "chat.secretRequest.executionPrivacy": "Hors du chat. Les identifiants réutilisables restent jusqu'à 10 minutes dans la mémoire du serveur pour cette session. Un redémarrage les efface.",
     "chat.secretRequest.submitted": "Données privées envoyées",
     "chat.secretRequest.submitFailed": "Les données privées n'ont pas été envoyées",
     'chat.secretRequest.inputLabel': 'Valeur du secret',
@@ -103,7 +103,7 @@ export const secretRequestI18n = {
   ja: {
     "chat.secretRequest.executionTitle": "非公開の入力",
     "chat.secretRequest.run": "送信して実行",
-    "chat.secretRequest.executionPrivacy": "今回の実行にメモリ上で渡され、チャットには残りません",
+    "chat.secretRequest.executionPrivacy": "チャットには残りません。再利用可能な認証情報は、このセッションのサーバーメモリに最大10分間保持されます。サーバーを再起動すると消去されます。",
     "chat.secretRequest.submitted": "非公開の入力を送信しました",
     "chat.secretRequest.submitFailed": "非公開の入力を送信できませんでした",
     'chat.secretRequest.inputLabel': 'シークレットの値',
@@ -123,7 +123,7 @@ export const secretRequestI18n = {
   ko: {
     "chat.secretRequest.executionTitle": "비공개 입력",
     "chat.secretRequest.run": "제출하고 실행",
-    "chat.secretRequest.executionPrivacy": "이번 실행에만 메모리로 전달되며 채팅에 남지 않습니다",
+    "chat.secretRequest.executionPrivacy": "채팅에 남지 않습니다. 재사용 가능한 인증 정보는 이 세션의 서버 메모리에 최대 10분간 보관됩니다. 서버를 재시작하면 삭제됩니다.",
     "chat.secretRequest.submitted": "비공개 입력이 제출되었습니다",
     "chat.secretRequest.submitFailed": "비공개 입력을 제출하지 못했습니다",
     'chat.secretRequest.inputLabel': '비밀 값',
@@ -143,7 +143,7 @@ export const secretRequestI18n = {
   pl: {
     "chat.secretRequest.executionTitle": "Prywatne dane",
     "chat.secretRequest.run": "Wyślij i uruchom",
-    "chat.secretRequest.executionPrivacy": "Przekazywane w pamięci do tego uruchomienia, poza czatem",
+    "chat.secretRequest.executionPrivacy": "Poza czatem. Dane uwierzytelniające do ponownego użycia pozostają w pamięci serwera tej sesji do 10 minut. Ponowne uruchomienie serwera je usuwa.",
     "chat.secretRequest.submitted": "Prywatne dane wysłane",
     "chat.secretRequest.submitFailed": "Nie wysłano prywatnych danych",
     'chat.secretRequest.inputLabel': 'Wartość sekretu',
@@ -163,7 +163,7 @@ export const secretRequestI18n = {
   'pt-BR': {
     "chat.secretRequest.executionTitle": "Dados privados",
     "chat.secretRequest.run": "Enviar e executar",
-    "chat.secretRequest.executionPrivacy": "Passados na memória para esta execução, fora do chat",
+    "chat.secretRequest.executionPrivacy": "Ficam fora do chat. Credenciais reutilizáveis ficam na memória do servidor desta sessão por até 10 minutos. Reiniciar o servidor as apaga.",
     "chat.secretRequest.submitted": "Dados privados enviados",
     "chat.secretRequest.submitFailed": "Os dados privados não foram enviados",
     'chat.secretRequest.inputLabel': 'Valor do segredo',
@@ -183,7 +183,7 @@ export const secretRequestI18n = {
   tr: {
     "chat.secretRequest.executionTitle": "Özel girdiler",
     "chat.secretRequest.run": "Gönder ve çalıştır",
-    "chat.secretRequest.executionPrivacy": "Bu çalıştırmaya bellekte iletilir, sohbetin dışında tutulur",
+    "chat.secretRequest.executionPrivacy": "Sohbetin dışında tutulur. Yeniden kullanılabilir kimlik bilgileri bu oturumun sunucu belleğinde en fazla 10 dakika kalır. Sunucu yeniden başlatılınca silinir.",
     "chat.secretRequest.submitted": "Özel girdiler gönderildi",
     "chat.secretRequest.submitFailed": "Özel girdiler gönderilemedi",
     'chat.secretRequest.inputLabel': 'Gizli değer',
@@ -203,7 +203,7 @@ export const secretRequestI18n = {
   uk: {
     "chat.secretRequest.executionTitle": "Приватні дані",
     "chat.secretRequest.run": "Надіслати й виконати",
-    "chat.secretRequest.executionPrivacy": "Передаються цьому запуску в пам'яті, поза чатом",
+    "chat.secretRequest.executionPrivacy": "Не потрапляють у чат. Облікові дані для повторного використання зберігаються в пам'яті сервера цього сеансу до 10 хвилин. Перезапуск сервера видаляє їх.",
     "chat.secretRequest.submitted": "Приватні дані надіслано",
     "chat.secretRequest.submitFailed": "Приватні дані не надіслано",
     'chat.secretRequest.inputLabel': 'Значення секрету',
@@ -223,7 +223,7 @@ export const secretRequestI18n = {
   'zh-CN': {
     "chat.secretRequest.executionTitle": "私密输入",
     "chat.secretRequest.run": "提交并运行",
-    "chat.secretRequest.executionPrivacy": "仅在内存中传给本次运行，不会进入聊天",
+    "chat.secretRequest.executionPrivacy": "不会进入聊天。可复用凭据最多在本会话的服务器内存中保留 10 分钟，服务器重启后即清除。",
     "chat.secretRequest.submitted": "私密输入已提交",
     "chat.secretRequest.submitFailed": "私密输入未提交",
     'chat.secretRequest.inputLabel': '密钥值',
@@ -243,7 +243,7 @@ export const secretRequestI18n = {
   'zh-TW': {
     "chat.secretRequest.executionTitle": "私密輸入",
     "chat.secretRequest.run": "提交並執行",
-    "chat.secretRequest.executionPrivacy": "僅在記憶體中傳給本次執行，不會進入聊天",
+    "chat.secretRequest.executionPrivacy": "不會進入聊天。可重複使用的憑證最多在本工作階段的伺服器記憶體中保留 10 分鐘，伺服器重新啟動後即清除。",
     "chat.secretRequest.submitted": "私密輸入已提交",
     "chat.secretRequest.submitFailed": "私密輸入未提交",
     'chat.secretRequest.inputLabel': '密鑰值',
@@ -263,7 +263,7 @@ export const secretRequestI18n = {
   ar: {
     "chat.secretRequest.executionTitle": "مدخلات خاصة",
     "chat.secretRequest.run": "إرسال وتشغيل",
-    "chat.secretRequest.executionPrivacy": "تُمرر في الذاكرة إلى هذا التشغيل وتبقى خارج المحادثة",
+    "chat.secretRequest.executionPrivacy": "تبقى خارج المحادثة. تبقى بيانات الاعتماد القابلة لإعادة الاستخدام في ذاكرة الخادم لهذه الجلسة لمدة تصل إلى 10 دقائق. تُمسح عند إعادة تشغيل الخادم.",
     "chat.secretRequest.submitted": "أُرسلت المدخلات الخاصة",
     "chat.secretRequest.submitFailed": "لم تُرسل المدخلات الخاصة",
     'chat.secretRequest.inputLabel': 'قيمة السر',
@@ -283,7 +283,7 @@ export const secretRequestI18n = {
   he: {
     "chat.secretRequest.executionTitle": "קלט פרטי",
     "chat.secretRequest.run": "שליחה והפעלה",
-    "chat.secretRequest.executionPrivacy": "מועבר בזיכרון להרצה זו ונשאר מחוץ לצ'אט",
+    "chat.secretRequest.executionPrivacy": "נשאר מחוץ לצ'אט. פרטי זיהוי לשימוש חוזר נשמרים בזיכרון השרת של ההפעלה הזו עד 10 דקות. הפעלה מחדש של השרת מוחקת אותם.",
     "chat.secretRequest.submitted": "הקלט הפרטי נשלח",
     "chat.secretRequest.submitFailed": "הקלט הפרטי לא נשלח",
     'chat.secretRequest.inputLabel': 'ערך הסוד',

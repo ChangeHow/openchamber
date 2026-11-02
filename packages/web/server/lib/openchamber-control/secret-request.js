@@ -4,6 +4,7 @@ import path from 'node:path';
 import { isRecord, isString } from '../shared/guards.js';
 import { OpenChamberControlError } from './error.js';
 import { createPageAnswers } from './render-page.js';
+import { createSecretLeases } from './secret-leases.js';
 import { normalizeSecretExecution, runSecret, validateSecretValues } from './secret-execution.js';
 
 export const SECRET_REQUEST_MAX_LABEL_LENGTH = 120;
@@ -76,14 +77,14 @@ export const createSecretFiles = ({ directory, now = Date.now, fsPromises = fs }
  * the user sent before it appeared: OpenCode delivers that message only once
  * this call returns, so waiting would hold it back.
  */
-export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnreadChat = async () => false }) => {
+export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnreadChat = async () => false, leases = createSecretLeases() }) => {
   const waits = createPageAnswers({ onWaitChange });
   // Only execution waits have an entry here. Values never enter page answers,
   // wait events, tool results or files.
   const executions = new Map();
   const keyFor = (sessionId, callId) => `${sessionId}\0${callId}`;
 
-  const run = async (input, { sessionId, callId, directory, signal = new AbortController().signal } = {}) => {
+  const run = async (input, { sessionId, callId, directory, signal = new AbortController().signal, onInputs = () => {} } = {}) => {
     if (!await isEnabled()) throw new OpenChamberControlError('The secret tool is turned off in OpenChamber settings', 403);
     if (process.platform === 'win32') throw new OpenChamberControlError('Private-input execution requires macOS or Linux', 501);
     if (!sessionId || !callId || !directory) throw new OpenChamberControlError('Execution requires a calling session, call id and directory', 400);
@@ -96,12 +97,32 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
     if (await hasUnreadChat(sessionId)) return { status: 'cancelled', exitCode: null, stdout: '', stderr: '' };
     const key = keyFor(sessionId, callId);
     if (executions.has(key)) throw new OpenChamberControlError('This call already waits for private inputs', 409);
-    const entry = { execution, values: null };
+    const entry = { pendingInputs: [], values: {}, submitted: new Set() };
     executions.set(key, entry);
     try {
-      const answer = await waits.wait({ sessionId, callId, title: execution.inputs[0].label, directory, signal });
-      if (answer.summary !== 'submitted' || signal.aborted) return { status: 'cancelled', exitCode: null, stdout: '', stderr: '' };
-      return await runSecret(execution, entry.values, signal);
+      while (!signal.aborted) {
+        // Re-resolve after a card wait: a lease may expire or be revoked while
+        // another input is being entered. Fresh one-shot values stay call-local.
+        let missing;
+        {
+          const leased = leases.resolve(sessionId, execution.inputs.map((binding) =>
+            entry.submitted.has(binding.env) ? { ...binding, refresh: false } : binding));
+          const values = { ...leased, ...entry.values };
+          missing = execution.inputs.filter((binding) => !Object.hasOwn(values, binding.env));
+          if (!missing.length) {
+            onInputs([]);
+            const reused = Object.keys(leased).filter((env) => !entry.submitted.has(env));
+            const result = await runSecret(execution, values, signal);
+            return reused.length ? { ...result, reused } : result;
+          }
+        }
+        entry.pendingInputs = missing;
+        const pending = waits.wait({ sessionId, callId, title: missing[0].label, directory, signal });
+        onInputs(missing.map(({ env, label }) => ({ env, label })));
+        const answer = await pending;
+        if (answer.summary !== 'submitted') break;
+      }
+      return { status: 'cancelled', exitCode: null, stdout: '', stderr: '' };
     } catch {
       if (signal.aborted) return { status: 'cancelled', exitCode: null, stdout: '', stderr: '' };
       // Never forward an exception that could contain private process state.
@@ -179,21 +200,25 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
     }
     const key = keyFor(sessionId, callId);
     const execution = executions.get(key);
-    if (execution) {
+    if (execution && execution.pendingInputs.length) {
       if (input.declined === true) {
         settle(sessionId, callId, 'declined', null);
-        executions.delete(key);
+        execution.pendingInputs = [];
         return { status: 'declined' };
       }
       let values;
       try {
-        values = validateSecretValues(execution.execution, input.values);
+        values = validateSecretValues({ inputs: execution.pendingInputs }, input.values);
       } catch {
         throw new OpenChamberControlError('Supply every private input together, without empty values or NUL characters, at most 16000 characters each', 400);
       }
       settle(sessionId, callId, 'submitted', null);
-      execution.values = values;
-      executions.delete(key);
+      leases.remember(sessionId, execution.pendingInputs, values);
+      for (const binding of execution.pendingInputs) {
+        execution.submitted.add(binding.env);
+        if (!binding.reuse) execution.values[binding.env] = values[binding.env];
+      }
+      execution.pendingInputs = [];
       return { status: 'submitted' };
     }
     // A stale execution answer must never fall through to file mode.
@@ -222,5 +247,11 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
     return { status: 'saved' };
   };
 
-  return { request, run, answer };
+  const revoke = (sessionId) => {
+    if (!sessionId) throw new OpenChamberControlError('Revocation requires a calling session', 400);
+    leases.revoke(sessionId);
+    return { status: 'revoked' };
+  };
+
+  return { request, run, answer, revoke };
 };

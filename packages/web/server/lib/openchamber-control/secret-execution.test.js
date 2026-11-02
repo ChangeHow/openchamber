@@ -19,6 +19,7 @@ describe.skipIf(process.platform === 'win32')('private-input execution', () => {
       { inputs: [{ env: '__proto__', label: 'Prototype' }] },
       { inputs: [{ env: 'BAD-KEY', label: 'Key' }] },
       { inputs: [{ env: 'KEY', label: ' ' }] },
+      { inputs: [{ ...inputs[0], reuse: 'true' }] }, { inputs: [{ ...inputs[0], refresh: 1 }] },
       { env: { PASSWORD: 'overlap' } }, { env: { PUBLIC: 2 } },
       { env: Object.fromEntries([['__proto__', 'public']]) },
       { workdir: 2 }, { timeoutMs: 600001 },

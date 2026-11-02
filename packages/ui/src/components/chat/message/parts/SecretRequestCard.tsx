@@ -25,8 +25,9 @@ export function SecretRequestCard({ part, request }: { part: ToolPart; request: 
     const [busy, setBusy] = React.useState(false);
     // What this client sent, shown until the call completes with the status
     // OpenCode stores.
-    const [sent, setSent] = React.useState<SecretRequestState | null>(null);
-    const state = request.state === 'waiting' && sent ? sent : request.state;
+    const inputKey = request.inputs?.map((input) => input.env).join('\0');
+    const [sent, setSent] = React.useState<{ state: SecretRequestState; inputKey: string | undefined } | null>(null);
+    const state = request.state === 'waiting' && sent && sent.inputKey === inputKey ? sent.state : request.state;
 
     const send = React.useCallback(async (answer: { value: string } | { values: Record<string, string> } | { declined: true }, outcome: SecretRequestState) => {
         setBusy(true);
@@ -34,14 +35,14 @@ export function SecretRequestCard({ part, request }: { part: ToolPart; request: 
             await answerSecretRequest({ sessionId: part.sessionID, callId: part.callID, ...answer }, directory);
             setValue('');
             setValues(new Map());
-            setSent(outcome);
+            setSent({ state: outcome, inputKey });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             toast.error(t(execution ? 'chat.secretRequest.submitFailed' : 'chat.secretRequest.saveFailed'), { description: message });
         } finally {
             setBusy(false);
         }
-    }, [directory, execution, part.callID, part.sessionID, t]);
+    }, [directory, execution, inputKey, part.callID, part.sessionID, t]);
 
     // The chat brings a card that waits into view, like a page that waits.
     const waiting = state === 'waiting';
@@ -75,7 +76,7 @@ export function SecretRequestCard({ part, request }: { part: ToolPart; request: 
                 className={execution ? "mt-3 flex flex-col gap-3" : "mt-3 flex items-center gap-2"}
                 onSubmit={(event) => {
                     event.preventDefault();
-                    if (complete && !busy) void send(execution ? { values: Object.fromEntries(values) } : { value }, execution ? 'submitted' : 'saved');
+                    if (complete && !busy) void send(request.inputs ? { values: Object.fromEntries([...values].filter(([env]) => request.inputs?.some((input) => input.env === env))) } : { value }, execution ? 'submitted' : 'saved');
                 }}
             >
                 {request.inputs ? request.inputs.map((input) => (

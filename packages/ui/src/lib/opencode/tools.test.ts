@@ -359,14 +359,16 @@ describe("requestedSecret", () => {
     const inputs = [{ env: "PASSWORD", label: "Password" }, { env: "OTP", label: "Code" }]
     const input = { action: "secret.run", parameters: { program: "/usr/bin/example", inputs } }
     expect(requestedSecret("openchamber_secret", running(input))).toBeNull()
-    const authorized: ToolState = { status: "running", input, time: { start: 1 }, metadata: { openchamber_secret: { secretExecution: true } } }
+    const authorized: ToolState = { status: "running", input, time: { start: 1 }, metadata: { openchamber_secret: { secretExecution: true, secretInputs: inputs } } }
     expect(requestedSecret("openchamber_secret", authorized)).toMatchObject({ inputs, state: "waiting" })
     expect(requestedSecret("openchamber_secret", { ...authorized, input: { action: "run", inputs } })).toMatchObject({ inputs, state: "waiting" })
-    expect(requestedSecret("openchamber_secret", { ...authorized, input: { action: "secret.run", inputs: [inputs[0], inputs[0]] } })).toBeNull()
+    expect(requestedSecret("openchamber_secret", { ...authorized, metadata: { openchamber_secret: { secretExecution: true, secretInputs: [] } } })).toBeNull()
+    expect(requestedSecret("openchamber_secret", { ...authorized, metadata: { openchamber_secret: { secretExecution: true, secretInputs: [inputs[0], inputs[0]] } } })).toBeNull()
+    expect(requestedSecret("openchamber_secret", { ...authorized, metadata: { openchamber_secret: { secretExecution: true, secretInputs: [inputs[1]] } } })).toMatchObject({ inputs: [inputs[1]] })
     expect(requestedSecret("openchamber_secret", completed(input, { openchamber: { ok: true } }))).toBeNull()
   })
 
-  test("is shown in place and always counts as waiting for the user", () => {
+  test("shows a file-mode card in place and counts it as waiting for the user", () => {
     expect(isShownInPlace("openchamber_secret", running(input))).toBe(true)
     expect(openChamberToolCall("openchamber_secret", input)?.awaitsAnswer).toBe(true)
   })

@@ -167,6 +167,7 @@ export const OPENCHAMBER_IMAGE_ACTIONS = Object.freeze(
  */
 export const OPENCHAMBER_SECRET_ACTION_DEFINITIONS = Object.freeze([
   { action: 'secret.request', title: 'Ask for a secret', description: 'Requires label and reason; saves a private file for 24 hours' },
+  { action: 'secrets.revoke', title: 'Forget session credentials', description: 'Clears all in-memory credential leases for the calling session' },
   { action: 'secret.run', title: 'Run with private inputs', description: 'Requires program and inputs; authorize execution, collect all private values, then run once in memory' },
 ]);
 

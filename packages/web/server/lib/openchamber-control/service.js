@@ -238,6 +238,7 @@ export const createOpenChamberControlService = (dependencies) => {
     // Where `secret.request` writes what the user saves
     // (`createSecretFiles`); absent disables file mode only.
     secretFiles = null,
+    secretLeases,
     // Hears when a page an agent shows starts and stops waiting for the
     // user's answer (render.page with awaitAnswer, secret.request and secret.run).
     onPageWaitChange = () => {},
@@ -383,7 +384,7 @@ export const createOpenChamberControlService = (dependencies) => {
   };
   const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
   const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers, hasUnreadChat });
-  const secretRequests = createSecretRequests({ isEnabled: isSecretToolEnabled, files: secretFiles, onWaitChange: onPageWaitChange, hasUnreadChat });
+  const secretRequests = createSecretRequests({ isEnabled: isSecretToolEnabled, files: secretFiles, leases: secretLeases, onWaitChange: onPageWaitChange, hasUnreadChat });
   const generateImage = createImageGenerationAction({
     getClient,
     readSettings: readSettingsFromDiskMigrated,
@@ -927,11 +928,15 @@ export const createOpenChamberControlService = (dependencies) => {
       if (action === 'image.generate') {
         return await generateImage(input, { directory: asNonEmptyString(contextDirectory), signal: options.signal });
       }
+      if (action === 'secrets.revoke') {
+        return secretRequests.revoke(asNonEmptyString(options.contextSessionId));
+      }
       if (action === 'secret.run') {
         // Only the managed plugin can assert OpenCode execution permissions.
         // The generic control/CLI route cannot authorize this action.
         if (options.secretExecutionAuthorized !== true) throw new OpenChamberControlError('Private-input execution requires the managed secret tool permission checks', 403);
         return await secretRequests.run(input, {
+          onInputs: options.onSecretInputs,
           sessionId: asNonEmptyString(options.contextSessionId),
           callId: asNonEmptyString(options.contextCallId),
           directory: asNonEmptyString(contextDirectory),

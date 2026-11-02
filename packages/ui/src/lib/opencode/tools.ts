@@ -433,7 +433,6 @@ const secretBindingsSchema = z.array(z.object({
 })).min(1).max(8).refine((inputs) => new Set(inputs.map((input) => input.env)).size === inputs.length)
 
 const secretRequestFields = z.object({
-  inputs: secretBindingsSchema.optional().catch(undefined),
   label: optionalText,
   reason: optionalText,
   placeholder: optionalText,
@@ -452,7 +451,7 @@ export type SecretRequestState = "waiting" | "saved" | "declined" | "not-given" 
 // chat. The file path the agent got is not needed here.
 const secretResultSchema = z
   .object({
-    openchamber_secret: z.object({ secretExecution: z.boolean().optional() }).optional().catch(undefined),
+    openchamber_secret: z.object({ secretExecution: z.boolean().optional(), secretInputs: secretBindingsSchema.optional().catch(undefined) }).optional().catch(undefined),
     openchamber: z.object({
       ok: z.boolean().optional().catch(undefined),
       answer: z.union([
@@ -473,10 +472,12 @@ export function requestedSecret(toolName: ToolName, state: ToolState): Requested
   if (toolName !== OPENCHAMBER_SECRET_TOOL) return null
   const parsed = secretRequestInputSchema.parse(state.input ?? {})
   if (parsed.action === "secret.run" || parsed.action === "run") {
-    const inputs = parsed.parameters?.inputs ?? parsed.inputs
+    if (state.status !== "running") return null
+    const execution = secretResultSchema.parse(state.metadata ?? {}).openchamber_secret
+    const inputs = execution?.secretInputs
     // Running input is visible before permissions are granted. Only the
-    // plugin's post-assertion progress allows a card to collect values.
-    if (!inputs || state.status !== "running" || secretResultSchema.parse(state.metadata ?? {}).openchamber_secret?.secretExecution !== true) return null
+    // server's post-assertion missing-input progress allows a card to collect values.
+    if (!inputs || execution?.secretExecution !== true) return null
     return { label: inputs[0].label, reason: "", placeholder: undefined, inputs, state: "waiting" }
   }
   const label = parsed.parameters?.label ?? parsed.label
@@ -655,11 +656,17 @@ export function mcpToolServer(toolName: ToolName, servers: readonly string[]): s
 }
 
 /** `null` for every tool that is not OpenChamber's own. */
-export function openChamberToolCall(toolName: ToolName, input: JsonValue | undefined): OpenChamberToolCall | null {
+export function openChamberToolCall(toolName: ToolName, input: JsonValue | undefined, metadata?: Metadata): OpenChamberToolCall | null {
   const tool = normalizeToolName(toolName)
   if (!OPENCHAMBER_TOOLS.has(tool)) return null
   const parsed = openChamberCallSchema.parse(input ?? {})
-  const awaitsAnswer = tool === OPENCHAMBER_SECRET_TOOL || (parsed.parameters?.awaitAnswer ?? parsed.awaitAnswer) === true
+  let awaitsAnswer = (parsed.parameters?.awaitAnswer ?? parsed.awaitAnswer) === true
+  if (tool === OPENCHAMBER_SECRET_TOOL) {
+    if (parsed.action === "secret.run" || parsed.action === "run") {
+      const execution = secretResultSchema.parse(metadata ?? {}).openchamber_secret
+      awaitsAnswer = execution?.secretExecution === true && !!execution.secretInputs?.length
+    } else awaitsAnswer = parsed.action !== "secrets.revoke" && parsed.action !== "revoke"
+  }
   return { tool, action: parsed.action, awaitsAnswer }
 }
 
