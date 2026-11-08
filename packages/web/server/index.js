@@ -200,7 +200,6 @@ import { createSessionLinker } from './lib/openchamber-sessions/session-link.js'
 import { linkedWorktreeOf } from './lib/openchamber-sessions/work-naming.js';
 import { createFileOpenRequester } from './lib/openchamber-control/file-open.js';
 import { createSecretLeases } from './lib/openchamber-control/secret-leases.js';
-import { createSecretFiles } from './lib/openchamber-control/secret-request.js';
 import { applyConnectAttemptTimeout } from './lib/network-defaults.js';
 import { applyOutboundProxyFromEnv } from './lib/outbound-proxy.js';
 import { applySystemCertificates } from './lib/system-ca.js';
@@ -2161,11 +2160,6 @@ const pluginNotificationEmitter = createPluginNotificationEmitter({
 // Execution leases expire in memory independently of a turn's waits.
 const secretLeases = createSecretLeases();
 setInterval(() => { secretLeases.sweep(); }, 60 * 1000).unref();
-// Secrets the user saved for an agent (secret.request). Each file is deleted
-// 24 hours after it was written: on start, and hourly while the server runs.
-const secretFiles = createSecretFiles({ directory: path.join(OPENCHAMBER_DATA_DIR, 'secrets') });
-void secretFiles.sweep();
-setInterval(() => { void secretFiles.sweep(); }, 60 * 60 * 1000).unref();
 
 const insideSpaceTaskNaming = process.env.OPENCHAMBER_SPACE_TASK_TITLE_FILE && process.env.OPENCHAMBER_SPACE_USER_TASK_TITLE_FILE
   ? createInsideSpaceTaskNaming({
@@ -2243,7 +2237,6 @@ const openChamberControlService = createOpenChamberControlService({
     const settings = await readSettingsFromDiskMigrated().catch(() => null);
     return settings?.agentSecretToolEnabled !== false;
   },
-  secretFiles,
   secretLeases,
   // A page that waits for the user's answer shows the session as waiting
   // the way a form does: the pending list the clients seed from, a live event

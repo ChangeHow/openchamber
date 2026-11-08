@@ -77,19 +77,19 @@ the user can want independently:
   the control service refuses the action when it is not. Never behind Code
   Mode, like render: the chat draws the images in place of the call's row from
   its stored result, which an `execute` script would hide.
-- `openchamber_secret` — `secret.request`, `secret.run` and `secrets.revoke`, a card where the user
-  types private inputs. File mode takes `label`, `reason` and optional
-  `placeholder`. Requests that need input wait, with the same plugin machinery as a page
+- `openchamber_secret` — `secret.run` and `secrets.revoke`. The default action
+  authorizes one public command, then collects its private environment inputs
+  on a password card. Requests that need input wait, with the same plugin machinery as a page
   with `awaitAnswer` (call id, `timeout: false`, the `session.prompt` hook
   that ends the wait when the user writes in the chat, and the inbox check
-  for a message sent before the card appeared). The value never
-  travels through the call: in file mode the chat posts it to the server, which writes it
-  to a private file, and the call returns only `{ status, file }`
+  for a message sent before the card appeared). Values travel directly from
+  the card to server memory, then into one child environment. No credential
+  file or path is created
   (`../openchamber-control/secret-request.js`). Direct, never behind Code
   Mode, because the chat draws the card from the call. On by default:
   enabled while `agentSecretToolEnabled` is not `false`, and the control
   service refuses the action when it is, so a stale plugin cannot keep asking.
-  `secret.run` adds one-shot private environment inputs. The plugin normalizes
+  The plugin normalizes
   the public command, resolves the working directory with `realpath`, asserts
   `external_directory` if outside the location and then `shell` on a fully
   quoted `cd ... && env ... program args` display. No implicit shell runs.
@@ -97,10 +97,10 @@ the user can want independently:
   bidirectional control characters (U+202E and friends) in an argument or
   public env value render reordered in the approval prompt, the same caveat
   as OpenCode's own shell permission.
-  A missing `ctx.permission.assert` refuses execution mode. Only after approval
+  A missing `ctx.permission.assert` refuses execution. Only after approval
   does the normalized request reach the server, with the same wait and
   cancellation machinery. The callback uses private NDJSON progress frames for
-  execution mode: `{ inputs, revision }` carries only the currently missing public
+  execution: `{ inputs, revision }` carries only the currently missing public
   bindings and their per-call revision, and `{ result }` carries the final versioned envelope. The plugin
   forwards inputs as `secretExecution: true, secretInputs, revision` metadata; the UI
   draws those fields only. An empty array hides the card for a fully leased
@@ -434,12 +434,13 @@ what happened before this existed.
 ### Why execution reuses the secret card
 
 The card already provides direct private submission, decline and the waiting
-notification across server-backed clients. Execution mode renders one password
+notification across server-backed clients. The card renders one password
 field per public binding and submits them together through the same answer
 route, avoiding a second secret transport. The card clears local input state
 on successful submission; the completed call shows its redacted execution
-result through the ordinary tool renderer. File-mode calls keep their existing
-card and result.
+result through the ordinary tool renderer. Single and multiple inputs share
+one keyed draft and the same submission path. The former file mode is removed;
+old `secret.request` calls fail without creating a credential file.
 
 ### Why execution permission belongs to the plugin
 

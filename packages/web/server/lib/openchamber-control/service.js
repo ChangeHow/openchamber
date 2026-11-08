@@ -292,12 +292,9 @@ export const createOpenChamberControlService = (dependencies) => {
     isKnowledgeToolEnabled = async () => true,
     isRenderToolEnabled = async () => true,
     isSecretToolEnabled = async () => true,
-    // Where `secret.request` writes what the user saves
-    // (`createSecretFiles`); absent disables file mode only.
-    secretFiles = null,
     secretLeases,
     // Hears when a page an agent shows starts and stops waiting for the
-    // user's answer (render.page with awaitAnswer, secret.request and secret.run).
+    // user's answer (render.page with awaitAnswer and secret.run).
     onPageWaitChange = () => {},
     // The requests each session waits on the user to answer, by session id
     // (`getPendingBlockingRequestsSnapshot`); an entry exists only while one is open.
@@ -445,7 +442,7 @@ export const createOpenChamberControlService = (dependencies) => {
   };
   const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
   const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers, hasUnreadChat });
-  const secretRequests = createSecretRequests({ isEnabled: isSecretToolEnabled, files: secretFiles, leases: secretLeases, onWaitChange: onPageWaitChange, hasUnreadChat });
+  const secretRequests = createSecretRequests({ isEnabled: isSecretToolEnabled, leases: secretLeases, onWaitChange: onPageWaitChange, hasUnreadChat });
   const generateImage = createImageGenerationAction({
     getClient,
     readSettings: readSettingsFromDiskMigrated,
@@ -1117,14 +1114,6 @@ export const createOpenChamberControlService = (dependencies) => {
           signal: options.signal,
         });
       }
-      if (action === 'secret.request') {
-        return await secretRequests.request(input, {
-          sessionId: asNonEmptyString(options.contextSessionId),
-          callId: asNonEmptyString(options.contextCallId),
-          directory: asNonEmptyString(contextDirectory),
-          signal: options.signal,
-        });
-      }
       if (action === 'file.open') {
         if (!fileOpen) {
           throw new OpenChamberControlError('The file viewer is not available on this server', 503);
@@ -1324,7 +1313,7 @@ export const createOpenChamberControlService = (dependencies) => {
   // (v2 dropped `context.directory` from a tool call), so it sends the session
   // id and the directory is resolved here, where it is authoritative.
   // `answerPage` is the chat's side of a page that waits (render.page with
-  // awaitAnswer), `answerSecret` the chat's side of a secret.request card.
+  // awaitAnswer), `answerSecret` the chat's side of a private-input card.
   const releaseAnswerWaits = (sessionId) => {
     pageAnswers.release(sessionId);
     secretRequests.release(sessionId);

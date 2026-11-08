@@ -45,7 +45,7 @@ export const registerOpenChamberControlRoutes = (app, { controlService }) => {
     }
   });
 
-  // The user submitted or declined private inputs for secret.request or secret.run.
+  // The user submitted or declined private inputs for an authorized execution.
   // The body carries the secret: it is never logged or echoed back.
   app.post('/api/openchamber/secret/answer', express.json({ limit: '1mb' }), async (req, res) => {
     try {

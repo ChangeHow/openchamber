@@ -39,12 +39,6 @@ import {
   RENDER_PAGE_MAX_HTML_LENGTH,
   RENDER_PAGE_MAX_TITLE_LENGTH,
 } from '../openchamber-control/render-page.js';
-import {
-  SECRET_REQUEST_CLOSED_IN_CHAT_NOTE,
-  SECRET_REQUEST_MAX_LABEL_LENGTH,
-  SECRET_REQUEST_MAX_PLACEHOLDER_LENGTH,
-  SECRET_REQUEST_MAX_REASON_LENGTH,
-} from '../openchamber-control/secret-request.js';
 import { createCallbackAddress } from './callback-address.js';
 
 const TOOL_SCHEMA_VERSION = 1;
@@ -286,7 +280,7 @@ const RENDER_PARAMETER_PROPERTIES = {
   awaitAnswer: { type: 'boolean', description: RENDER_PAGE_AWAIT_DESCRIPTION },
 };
 
-// Its own names: `label` means something else in the web tool.
+// Public command and private input bindings; values arrive only through the card.
 const SECRET_PARAMETER_PROPERTIES = {
   program: { type: 'string', description: 'secret.run: absolute executable path; no implicit shell' },
   args: { type: 'array', items: { type: 'string' }, description: 'Public arguments only. The program must read private values from the declared environment variables' },
@@ -301,9 +295,6 @@ const SECRET_PARAMETER_PROPERTIES = {
   env: { type: 'object', additionalProperties: { type: 'string' }, description: 'Public environment settings only; must not overlap inputs[].env' },
   workdir: { type: 'string', description: 'Working directory, relative to the calling location or absolute; defaults to that location' },
   timeoutMs: { type: 'integer', minimum: 1, maximum: 600000, description: 'Execution timeout after submission, default 120000 ms; excludes permission and input waits' },
-  label: { type: 'string', description: `What the secret is, the card's title, such as Cloudflare API token. At most ${SECRET_REQUEST_MAX_LABEL_LENGTH} characters` },
-  reason: { type: 'string', description: `In the user's language: what you will do with it, and where to create it when that is not obvious. At most ${SECRET_REQUEST_MAX_REASON_LENGTH} characters` },
-  placeholder: { type: 'string', description: `The value's shape, such as sk-ant-...; at most ${SECRET_REQUEST_MAX_PLACEHOLDER_LENGTH} characters` },
 };
 
 const USAGE_PARAMETER_PROPERTIES = {
@@ -387,11 +378,10 @@ const IMAGE_TOOL_DESCRIPTION = "Generate or edit images with the image model the
   + "Without path the files go to OpenCode's temporary folder: move one into the project when it belongs there. Every call costs the user money: make what was asked, not extra variations.";
 
 const SECRET_TOOL_DESCRIPTION = "Collect private inputs on a password card in the chat and wait for the user: a password, token or OTP, including website login and unlock flows. Prefer this over asking in chat or handing the task off solely for credential entry; use a local helper to bridge the input to the target application. Never put secrets in tool arguments, public environment, labels or chat. "
-  + "secret.run authorizes one program before showing the card, injects all values into that process environment in memory, and returns only status, exitCode and literal-redacted stdout/stderr. The program, or a helper it drives, must read the named environment variables. Runs on the OpenChamber server host as its user, on macOS/Linux. No automatic retry. "
+  + "secret.run (default) authorizes one program before showing the card, injects all values into that process environment in memory, and returns only status, exitCode and literal-redacted stdout/stderr. The program, or a helper it drives, must read the named environment variables. Runs on the OpenChamber server host as its user, on macOS/Linux. Each call executes once, with no automatic retry or credential files. "
   + "The user may wait 30 minutes or longer, so state prepared before the wait may have expired: keep the program self-contained, and after the inputs arrive recheck current state, wake and focus the UI, and establish fresh connections. Do not rely on pre-prompt UI focus, screenshot coordinates, expiring sessions or other short-lived setup; recheck or refresh it inside the program before acting. "
-  + "With inputs[].reuse, later calls using the same env name reuse its valid session lease; only missing inputs get a card. Reuse never extends expiry or skips command permissions. Leases have a 30-minute absolute session window cap and disappear on server restart. Call secrets.revoke when the user says forget it or the task is done. "
-  + "This is not a sandbox or a general interactive terminal: the program and its descendants can read the values and cause external effects. Cancellation kills the local process group but cannot undo effects. Redaction covers complete literal values only, not transformations. "
-  + "secret.request (default) keeps file mode: requires label/reason, saves one secret to a private file deleted after 24 hours, and returns its path. Read that file only inside the command needing it; never print, log or copy it into the project. Decline or a chat message cancels the wait.";
+  + "Set inputs[].reuse only for passwords or long-lived tokens the user permits retaining, never OTPs. After a script error, fix the public script and call again with the same env name and reuse=true. Leases expire 10 minutes from submission without extension on use, capped by a 30-minute session window. inputs[].refresh requests a replacement. Every call checks command permissions. Call secrets.revoke when the user says forget it or the task is done; restarting the server also clears leases. "
+  + "This is not a sandbox or a general interactive terminal: the program and its descendants can read the values and cause external effects. Decline, Stop or a chat message cancels the call. Cancellation kills the local process group but cannot undo effects. Redaction covers complete literal values only, not transformations.";
 
 // What a read costs and how fresh it is, because an agent checking a limit
 // before a task otherwise polls it in a loop or trusts an old sample.
@@ -462,7 +452,7 @@ const createResult = ({ ok, action, data, error, exitCode }) => ({
 
 /**
  * A call that waits for the user's answer (render.page with awaitAnswer, and
- * every secret.request) holds its call open. A message the user writes in the
+ * secret.run) holds its call open. A message the user writes in the
  * chat meanwhile would sit behind that call: OpenCode delivers it only after
  * the call returns. So
  * the call registers itself under its session, and the plugin's prompt hook
@@ -672,7 +662,7 @@ const createToolEntry = ({ name, description, definitions, parameters, codeMode,
   const secret = name === 'openchamber_secret';
   if (secret) {
     actionSchema.required = [];
-    actionSchema.normalize = '        args.action ??= "secret.request"\n';
+    actionSchema.normalize = '        args.action ??= "secret.run"\n';
   }
   return String.raw`    tools.add({
       name: ${JSON.stringify(name)},
@@ -750,9 +740,9 @@ ${secret ? SECRET_EXECUTION_RESPONSE : '          const content = await response
           try { result = JSON.parse(content) } catch {}
           const valid = result?.schemaVersion === ${TOOL_SCHEMA_VERSION} && typeof result?.ok === "boolean" && typeof result?.action === "string"
           await progress({ ok: valid && result.ok === true })
-          if (valid) return { content, metadata: { openchamber: { schemaVersion: ${TOOL_SCHEMA_VERSION}, action: args.action, description: title, ok: result.ok === true${answers ? ANSWER_METADATA : ''} } } }
+          if (valid) return { content, metadata: { openchamber: { schemaVersion: ${TOOL_SCHEMA_VERSION}, action: args.action, description: title, ok: result.ok === true${answers && !secret ? ANSWER_METADATA : ''} } } }
           return failure({ schemaVersion: ${TOOL_SCHEMA_VERSION}, ok: false, action: args.action, error: { message: "OpenChamber returned an invalid response", kind: "runtime", status: response.status } })
-        } catch (error) {${secret ? SECRET_EXECUTION_CANCELLED : ''}${answers ? answerClosedInChat(answers.closedInChatNote) : ''}
+        } catch (error) {${secret ? SECRET_EXECUTION_CANCELLED : answers ? answerClosedInChat(answers.closedInChatNote) : ''}
           return failure({ schemaVersion: ${TOOL_SCHEMA_VERSION}, ok: false, action: args.action, error: { message: error instanceof Error ? error.message : String(error), kind: "runtime" } })
         }${answers ? ANSWER_WAIT_RELEASE : ''}
       },
@@ -893,7 +883,7 @@ const createPluginSource = ({ includeControl, includeSchedule, includeWeb, inclu
       // Never behind Code Mode, like render: the chat draws the card from
       // this tool's own call, and the answer has to reach that call.
       codeMode: false,
-      answers: { waitsWhen: 'args.action !== "secrets.revoke" && args.action !== "revoke"', closedInChatNote: SECRET_REQUEST_CLOSED_IN_CHAT_NOTE },
+      answers: { waitsWhen: 'args.action === "secret.run" || args.action === "run"' },
     }));
   }
   if (includeImage) {

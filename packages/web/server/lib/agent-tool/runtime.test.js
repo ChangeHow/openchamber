@@ -731,7 +731,7 @@ describe('managed agent tool runtime', () => {
     const tools = await loadTools(dataDir, 'secret', hooks);
 
     expect(Object.keys(tools)).toEqual(['openchamber_secret']);
-    expect(Object.keys(tools.openchamber_secret.input.properties.parameters.properties).sort()).toEqual(['args', 'env', 'inputs', 'label', 'placeholder', 'program', 'reason', 'timeoutMs', 'workdir']);
+    expect(Object.keys(tools.openchamber_secret.input.properties.parameters.properties).sort()).toEqual(['args', 'env', 'inputs', 'program', 'timeoutMs', 'workdir']);
     expect(tools.openchamber_secret.options).toEqual({ codemode: false });
     expect(tools.openchamber_secret.description.length).toBeLessThanOrEqual(2048);
     // A chat message ends the wait, like a page's.
@@ -802,12 +802,13 @@ describe('managed agent tool runtime', () => {
     const progress = vi.fn(async (metadata) => { if (metadata.openchamber_secret.secretInputs?.length) cardReady(); });
     const logs = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const pending = tools.openchamber_secret.execute({ action: 'secret.run', parameters: {
+      // An omitted action always means execution, never secret storage.
+      const pending = tools.openchamber_secret.execute({ parameters: {
         program: process.execPath, workdir: dataDir, args: ['-e', 'process.stdout.write(process.env.PASSWORD); process.stderr.write(process.env.OTP)'],
         inputs: [{ env: 'PASSWORD', label: 'Password', reuse: true }, { env: 'OTP', label: 'Code' }],
       } }, { sessionID: 'ses_execution', id: 'call_execution', signal: new AbortController().signal, progress });
       await Promise.race([Promise.all([waiting, card]), pending.then((result) => { throw new Error(result.content); })]);
-      expect(requestedSecret('openchamber_secret', { status: 'running', input: { action: 'secret.run', inputs: [{ env: 'PASSWORD', label: 'Password' }, { env: 'OTP', label: 'Code' }] }, metadata: progress.mock.lastCall[0], time: { start: 1 } })).toMatchObject({ state: 'waiting' });
+      expect(requestedSecret('openchamber_secret', { status: 'running', input: {}, metadata: progress.mock.lastCall[0], time: { start: 1 } })?.inputs).toHaveLength(2);
       const values = { PASSWORD: 'synthetic-private-password', OTP: 'synthetic-private-code' };
       const answer = await request(server).post('/api/openchamber/secret/answer').send({ sessionId: 'ses_execution', callId: 'call_execution', values }).expect(200);
       expect(answer.body).toEqual({ status: 'submitted' });
@@ -849,6 +850,9 @@ describe('managed agent tool runtime', () => {
       expect(JSON.parse((await cancelled).content)).toMatchObject({ ok: true, data: { status: 'cancelled' } });
       for (const value of Object.values(values)) expect(JSON.stringify({ retried, revoked, mixedAnswer: mixedAnswer.body, progress: progress.mock.calls })).not.toContain(value);
       await request(server).post('/api/openchamber/control').send({ action: 'secret.run', input: {} }).expect(403);
+      const obsolete = await tools.openchamber_secret.execute({ action: 'secret.request', label: 'Token', reason: 'Old file mode' },
+        { sessionID: 'ses_execution', id: 'call_old', signal: new AbortController().signal, progress });
+      expect(JSON.parse(obsolete.content)).toMatchObject({ ok: false });
     } finally {
       logs.mockRestore();
       vi.unstubAllEnvs();

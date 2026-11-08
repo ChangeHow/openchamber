@@ -134,26 +134,23 @@ other.
   against `budgetMB` when the budget cut it) and a note telling the agent to
   split the page or use smaller images. A page whose images all show answers
   as before.
-- `secret-request.js` owns file requests and in-memory execution handoff for
-  the `openchamber_secret` agent tool. `secret.request` retains its file contract.
+- `secret-request.js` owns in-memory input collection for the
+  `openchamber_secret` agent tool. `secret.run` is the default and only execution
+  flow; `secrets.revoke` clears retained credentials. There is no file mode,
+  credential writer, file-path result or file cleanup timer. Obsolete
+  `secret.request` calls are refused, including calls from a stale plugin.
   The call waits in its own `createPageAnswers` instance, so the
   session shows as waiting for the user exactly like a page (pending list,
   `openchamber:page-waiting` with the label as title, "Input needed"), while
   a page's answer route can never reach a secret's wait. The chat answers
-  through `POST /api/openchamber/secret/answer` with the value or
-  `declined: true`. The route writes the value to
-  `<data-dir>/secrets/<random>` (file `0600` created with `wx`, directory
-  `0700`) and only then settles the wait with the path; when the call
-  stopped waiting meanwhile, the file is removed and the answer is a `404`.
-  A write that fails partway removes its file, and so does an answer that
-  settles the wait just as the call is aborted. Like a page, the card does
+  through `POST /api/openchamber/secret/answer` with all requested `values` or
+  `declined: true`. Values stay in the call's private entry or explicit lease;
+  the wait carries only a submission marker. A late answer is a `404`.
+  Like a page, the card does
   not wait when `hasUnreadChat` finds a message the user sent before it
-  appeared; the call answers `{ answered: false, reason: 'chat-sent-earlier' }`.
-  The value never enters the tool call, its result, OpenCode's store or the
-  agent's context; the agent reads the file inside its own command, so the
-  card says the agent's commands can read it. `createSecretFiles().sweep()`
-  deletes files 24 hours after they were written, on server start and
-  hourly. Answers `403` while `agentSecretToolEnabled` is `false`.
+  appeared; the call answers with a cancelled execution result.
+  Values never enter the tool call, its result, OpenCode's store or the
+  agent's context. Answers `403` while `agentSecretToolEnabled` is `false`.
 - `secret.run` accepts an absolute `program`, public `args` and `env`, 1 to 8
   unique private environment bindings with short labels, an optional `workdir`
   and `timeoutMs`. Each binding may opt into `reuse: true`; `refresh: true`
@@ -170,7 +167,7 @@ other.
   another field waits causes a new request for the missing binding before spawn.
   One-shot values stay call-local. Page answers and wait events carry only a
   submission marker. Decline or abort before submission starts no process;
-  stale answers are refused. No execution answer enters `createSecretFiles`.
+  stale answers are refused. No input is written to credential storage.
   `messageProgress(sessionId)` restores public missing fields and a per-call
   revision onto running message pages after the upstream response arrives.
   This recovers late clients through existing reads without polling. Snapshots
@@ -621,10 +618,16 @@ fallback keeps the page's behavior and says why in `listError`.
 
 ### Why execution inputs have an in-memory handoff
 
-The existing file mode deliberately retains a credential for 24 hours.
-Execution answers stay in memory and never travel through file storage, tool
-metadata or OpenCode's transcript. Only public bindings and the redacted
-process result cross the tool callback.
+The former card wrote a credential to disk and handed its path to the agent
+for later commands. That flow is replaced: a caller must declare and authorize
+the consuming program before any input is collected. Values go straight from
+the card to one process environment in server memory. Only public bindings and
+the redacted process result cross the tool callback. The native OpenCode Form
+is not used, so its answer cache and answer events never receive these values.
+
+There is no import or automatic deletion of credential files made by older
+versions. Operators upgrading an existing installation must remove those old
+`<data-dir>/secrets` files separately. The memory-only flow never reads them.
 
 ### Why credential leases stay in session memory with short issuance deadlines
 

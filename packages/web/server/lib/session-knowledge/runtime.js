@@ -262,7 +262,7 @@ export const WORKFLOW_GUIDANCE = 'The openchamber_workflow tool runs a script th
  * the transcript.
  */
 export const SECRET_REQUEST_GUIDANCE = "The openchamber_secret tool asks the user for a secret (API key, token, password) on a private card in the chat."
-  + " Whenever you need one, call it: never ask for a secret in the chat or tell the user to paste one there. Use secret.run for one authorized program with private environment inputs in memory; secret.request retains the private-file mode."
+  + " Whenever you need one, call it: never ask for a secret in the chat or tell the user to paste one there. Supply the program and input bindings; secret.run authorizes and executes it once with private environment inputs in memory. No credential file or readable path is created."
   + " For script retries, mark inputs[].reuse only for passwords or long-lived tokens, never one-time codes or credentials the user said not to remember. Reuse the same env binding on later secret.run calls; inputs[].refresh asks for a fresh value. Leases expire 10 minutes from submission, with a 30-minute session window cap, and a server restart clears them. Call secrets.revoke when the user says forget it or the task is done.";
 
 const directToolNames = ({ rendering, secrets, workflows }) => [

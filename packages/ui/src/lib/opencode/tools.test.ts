@@ -355,44 +355,29 @@ describe("renderedPage", () => {
 
 describe("requestedSecret", () => {
   const completed = (input: ToolInput, metadata?: Metadata): ToolState => ({ status: "completed", input, output: "", metadata, time: { start: 1, end: 2 } })
-  const running = (input: ToolInput): ToolState => ({ status: "running", input, time: { start: 1 } })
-  const input = { action: "secret.request", parameters: { label: "Cloudflare API token", reason: "To deploy the worker.", placeholder: "cf-..." } }
-  const request = { label: "Cloudflare API token", reason: "To deploy the worker.", placeholder: "cf-..." }
-
-  test("asks while its call runs and folds to how it ended", () => {
-    expect(requestedSecret("openchamber_secret", running(input))).toEqual({ ...request, state: "waiting" })
-    expect(requestedSecret("openchamber_secret", completed(input, { openchamber: { ok: true, answer: { status: "saved", file: "/data/secrets/abc" } } }))?.state).toBe("saved")
-    expect(requestedSecret("openchamber_secret", completed(input, { openchamber: { ok: true, answer: { status: "declined" } } }))?.state).toBe("declined")
-    expect(requestedSecret("openchamber_secret", completed(input, { openchamber: { ok: true, answer: { answered: false, reason: "chat" } } }))?.state).toBe("not-given")
-    expect(requestedSecret("openchamber_secret", { status: "error", input, error: "aborted", time: { start: 1, end: 2 } })?.state).toBe("not-given")
-    // Beside the action, as the plugin also accepts it.
-    expect(requestedSecret("openchamber_secret", running({ action: "secret.request", label: "Key", reason: "Why" })))
-      .toEqual({ label: "Key", reason: "Why", placeholder: undefined, state: "waiting" })
-  })
-
-  test("leaves a refused, incomplete or foreign call to its tool row", () => {
-    expect(requestedSecret("openchamber_secret", completed(input, { openchamber: { ok: false } }))).toBeNull()
-    expect(requestedSecret("openchamber_secret", completed(input))).toBeNull()
-    expect(requestedSecret("openchamber_secret", running({ action: "secret.request", parameters: { label: "Key" } }))).toBeNull()
-    expect(requestedSecret("openchamber_render", running(input))).toBeNull()
-  })
+  const running = (input: ToolInput): Extract<ToolState, { status: "running" }> => ({ status: "running", input, time: { start: 1 } })
 
   test("collects execution bindings only after permission assertions and leaves the final result visible", () => {
     const inputs = [{ env: "PASSWORD", label: "Password" }, { env: "OTP", label: "Code" }]
     const input = { action: "secret.run", parameters: { program: "/usr/bin/example", inputs } }
     expect(requestedSecret("openchamber_secret", running(input))).toBeNull()
     const authorized: ToolState = { status: "running", input, time: { start: 1 }, metadata: { openchamber_secret: { secretExecution: true, secretInputs: inputs } } }
-    expect(requestedSecret("openchamber_secret", authorized)).toMatchObject({ inputs, state: "waiting" })
-    expect(requestedSecret("openchamber_secret", { ...authorized, input: { action: "run", inputs } })).toMatchObject({ inputs, state: "waiting" })
+    expect(requestedSecret("openchamber_secret", authorized)).toEqual({ inputs })
+    expect(requestedSecret("openchamber_secret", { ...authorized, input: { inputs } })).toEqual({ inputs })
     expect(requestedSecret("openchamber_secret", { ...authorized, metadata: { openchamber_secret: { secretExecution: true, secretInputs: [] } } })).toBeNull()
     expect(requestedSecret("openchamber_secret", { ...authorized, metadata: { openchamber_secret: { secretExecution: true, secretInputs: [inputs[0], inputs[0]] } } })).toBeNull()
     expect(requestedSecret("openchamber_secret", { ...authorized, metadata: { openchamber_secret: { secretExecution: true, secretInputs: [inputs[1]] } } })).toMatchObject({ inputs: [inputs[1]] })
     expect(requestedSecret("openchamber_secret", completed(input, { openchamber: { ok: true } }))).toBeNull()
   })
 
-  test("shows a file-mode card in place and counts it as waiting for the user", () => {
-    expect(isShownInPlace("openchamber_secret", running(input))).toBe(true)
-    expect(openChamberToolCall("openchamber_secret", input)?.awaitsAnswer).toBe(true)
+  test("shows only authorized waiting inputs, never an obsolete file request", () => {
+    const input = { action: "secret.request", label: "Token", reason: "Old storage request" }
+    expect(requestedSecret("openchamber_secret", running(input))).toBeNull()
+    expect(isShownInPlace("openchamber_secret", running(input))).toBe(false)
+    expect(openChamberToolCall("openchamber_secret", input)?.awaitsAnswer).toBe(false)
+    const metadata = { openchamber_secret: { secretExecution: true, secretInputs: [{ env: "TOKEN", label: "Token" }] } }
+    expect(isShownInPlace("openchamber_secret", { ...running({}), metadata })).toBe(true)
+    expect(openChamberToolCall("openchamber_secret", {}, metadata)?.awaitsAnswer).toBe(true)
   })
 })
 

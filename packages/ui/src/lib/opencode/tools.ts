@@ -485,33 +485,10 @@ const secretBindingsSchema = z.array(z.object({
   label: z.string().trim().min(1).max(120),
 })).min(1).max(8).refine((inputs) => new Set(inputs.map((input) => input.env)).size === inputs.length)
 
-const secretRequestFields = z.object({
-  label: optionalText,
-  reason: optionalText,
-  placeholder: optionalText,
-})
-
-// Read like a page's input: inside `parameters` or beside `action`.
-const secretRequestInputSchema = secretRequestFields
-  .extend({ action: optionalText, parameters: secretRequestFields.optional().catch(undefined) })
-  .catch({})
-
-/** Where a secret request stands. `not-given`: the user wrote in the chat, or the turn ended first. */
-export type SecretRequestState = "waiting" | "saved" | "declined" | "not-given" | "submitted"
-
-// How a secret request ended, as the plugin records it in the call's metadata:
-// the server's status, or the plugin's own answer when the user wrote in the
-// chat. The file path the agent got is not needed here.
+// Public progress only. Private values never enter OpenCode metadata.
 const secretResultSchema = z
   .object({
     openchamber_secret: z.object({ secretExecution: z.boolean().optional(), secretInputs: secretBindingsSchema.optional().catch(undefined), revision: z.number().int().nonnegative().optional().catch(undefined) }).optional().catch(undefined),
-    openchamber: z.object({
-      ok: z.boolean().optional().catch(undefined),
-      answer: z.union([
-        z.object({ status: z.enum(["saved", "declined"]) }).transform(({ status }): SecretRequestState => status),
-        z.object({ answered: z.literal(false) }).transform((): SecretRequestState => "not-given"),
-      ]).optional().catch(undefined),
-    }).optional().catch(undefined),
   })
   .catch({})
 
@@ -530,34 +507,19 @@ export function withNewerSecretProgress(existing: ToolPart, incoming: ToolPart):
   return { ...incoming, state: { ...incoming.state, metadata: { ...incoming.state.metadata, openchamber_secret: previous } } }
 }
 
-export type RequestedSecret = { label: string; reason: string; placeholder: string | undefined; state: SecretRequestState; inputs?: Array<{ env: string; label: string }> }
+export type RequestedSecret = { inputs: Array<{ env: string; label: string }> }
 
 /**
  * The card an `openchamber_secret` call asks on. A call the server refused
  * keeps its tool row, so the refusal stays readable.
  */
 export function requestedSecret(toolName: ToolName, state: ToolState): RequestedSecret | null {
-  if (toolName !== OPENCHAMBER_SECRET_TOOL) return null
-  const parsed = secretRequestInputSchema.parse(state.input ?? {})
-  if (parsed.action === "secret.run" || parsed.action === "run") {
-    if (state.status !== "running") return null
-    const execution = secretResultSchema.parse(state.metadata ?? {}).openchamber_secret
-    const inputs = execution?.secretInputs
-    // Running input is visible before permissions are granted. Only the
-    // server's post-assertion missing-input progress allows a card to collect values.
-    if (!inputs || execution?.secretExecution !== true) return null
-    return { label: inputs[0].label, reason: "", placeholder: undefined, inputs, state: "waiting" }
-  }
-  const label = parsed.parameters?.label ?? parsed.label
-  const reason = parsed.parameters?.reason ?? parsed.reason
-  if (!label || !reason) return null
-  const request = { label, reason, placeholder: parsed.parameters?.placeholder ?? parsed.placeholder }
-  if (state.status === "running") return { ...request, state: "waiting" }
-  if (state.status === "error") return { ...request, state: "not-given" }
-  if (state.status !== "completed") return null
-  const result = secretResultSchema.parse(state.metadata ?? {}).openchamber
-  if (result?.ok !== true || !result.answer) return null
-  return { ...request, state: result.answer }
+  if (toolName !== OPENCHAMBER_SECRET_TOOL || state.status !== "running") return null
+  const execution = secretResultSchema.parse(state.metadata ?? {}).openchamber_secret
+  const inputs = execution?.secretInputs
+  // The server publishes missing bindings only after execution is authorized.
+  if (!inputs || execution?.secretExecution !== true) return null
+  return { inputs }
 }
 
 export function subagentAgent(input: ToolInput | undefined): string | undefined {
@@ -746,10 +708,8 @@ export function openChamberToolCall(toolName: ToolName, input: JsonValue | undef
   const parsed = openChamberCallSchema.parse(input ?? {})
   let awaitsAnswer = (parsed.parameters?.awaitAnswer ?? parsed.awaitAnswer) === true
   if (tool === OPENCHAMBER_SECRET_TOOL) {
-    if (parsed.action === "secret.run" || parsed.action === "run") {
-      const execution = secretResultSchema.parse(metadata ?? {}).openchamber_secret
-      awaitsAnswer = execution?.secretExecution === true && !!execution.secretInputs?.length
-    } else awaitsAnswer = parsed.action !== "secrets.revoke" && parsed.action !== "revoke"
+    const execution = secretResultSchema.parse(metadata ?? {}).openchamber_secret
+    awaitsAnswer = execution?.secretExecution === true && !!execution.secretInputs?.length
   }
   return { tool, action: parsed.action, awaitsAnswer }
 }

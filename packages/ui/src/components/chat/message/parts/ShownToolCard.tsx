@@ -22,7 +22,7 @@ export function ShownToolCard({ part, onShowPopup }: { part: ToolPart; onShowPop
   const secret = React.useMemo(() => requestedSecret(part.tool, part.state), [part.tool, part.state]);
   if (runId) return <WorkflowRunCard sessionId={part.sessionID} runId={runId} />;
   if (images.length > 0) return <GeneratedImages part={part} paths={images} onShowPopup={onShowPopup} />;
-  if (secret) return <SecretRequestCard part={part} request={secret} />;
+  if (secret) return <SecretRequestCard key={`${part.callID}\0${secret.inputs.map((input) => input.env).join('\0')}`} part={part} request={secret} />;
   return <ShownPage part={part} />;
 }
 
