@@ -1,10 +1,16 @@
 import { describe, expect, test } from 'bun:test';
-import { marked } from 'marked';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { Streamdown } from 'streamdown';
 import { formatSelectedConversationMarkdown, type SelectedConversationMessage } from './selectionMarkdown';
 
 const labels = { user: '用户', assistant: '助手', attachment: '附件' };
 const message = (segments: readonly string[], role: 'user' | 'assistant' = 'assistant'): SelectedConversationMessage => ({ key: 'same-key', role, segments });
 const format = (...messages: SelectedConversationMessage[]) => formatSelectedConversationMarkdown(messages, labels);
+const render = (source: string) => renderToStaticMarkup(React.createElement(Streamdown, {
+    mode: 'static', children: source,
+    components: { a: ({ href, children }) => React.createElement('a', { href }, children) },
+}));
 
 describe('selected conversation Markdown', () => {
     test('preserves raw block structure and localized roles in selection order', () => {
@@ -18,23 +24,33 @@ describe('selected conversation Markdown', () => {
     });
     test('isolates full, collapsed, shortcut and image references across segments', () => {
         const result = format(message(['[text][Docs] [Docs][] [Docs] ![image][Docs]', '[Docs]: https://one.example/docs "First"']), message(['[text][Docs] [Docs][] [Docs]\n\n[Docs]: https://two.example/docs "Second"']));
-        expect(result).toContain('[text][oc-1-Docs] [Docs][oc-1-Docs] [Docs][oc-1-Docs] ![image][oc-1-Docs]');
-        expect(result).toContain('[oc-1-Docs]: https://one.example/docs "First"');
-        expect(result).toContain('[oc-2-Docs]: https://two.example/docs "Second"');
-        expect(marked.parse(result)).toContain('href="https://one.example/docs"');
-        expect(marked.parse(result)).toContain('href="https://two.example/docs"');
+        expect(result).toContain('[text][oc-1-docs] [Docs][oc-1-docs] [Docs][oc-1-docs] ![image][oc-1-docs]');
+        expect(result).toContain('[oc-1-docs]: https://one.example/docs "First"');
+        expect(result).toContain('[oc-2-docs]: https://two.example/docs "Second"');
+        expect(render(result)).toContain('href="https://one.example/docs"');
+        expect(render(result)).toContain('href="https://two.example/docs"');
     });
     test('preserves nested reference images and multiline quote prefixes', () => {
         const source = '[![image][img]][page]\n\n> [a\n> b][page]\n\n[img]: https://example.com/image\n[page]: https://example.com/page';
         const result = format(message([source]));
         expect(result).toContain('[![image][oc-1-img]][oc-1-page]');
         expect(result).toContain('> [a\n> b][oc-1-page]');
-        expect(marked.parse(result)).toContain('<img src="https://example.com/image"');
+        expect(render(result)).toContain('src="https://example.com/image"');
+    });
+    test('keeps reference labels with entities and escapes linked after joining', () => {
+        for (const [reference, definition] of [
+            ['A&amp;B', '[A&amp;B]: https://example.com/docs'],
+            ['a\\*b', '[a\\*b]: https://example.com/docs'],
+            ['a b', '> [a\n> b]: https://example.com/docs'],
+        ]) {
+            const source = `[x][${reference}]\n\n${definition}`;
+            expect(render(format(message([source]), message([source])))).toContain('href="https://example.com/docs"');
+        }
     });
     test('unresolved references cannot bind to another message', () => {
         const result = format(message(['Use [missing] literally.']), message(['[missing]: https://example.com']));
-        expect(marked.parse(result)).toContain('<p>Use [missing] literally.</p>');
-        expect(marked.parse(result)).not.toContain('<a href=');
+        expect(render(result)).toContain('Use [missing] literally.');
+        expect(render(result)).not.toContain('href="https://example.com"');
     });
     test('isolates footnotes, undefined footnotes and multiline definitions', () => {
         const source = 'Text[^n] and [^missing].\n\n[^n]: First line\n    continuation';
@@ -44,7 +60,7 @@ describe('selected conversation Markdown', () => {
         expect(result).toContain('[^oc-2-n]: First line');
         const unresolved = format(message(['Text[^missing].']), message(['[^missing]: Other message note']));
         expect(unresolved).toContain('Text\\[^missing].');
-        expect(marked.parse(unresolved)).toContain('Text[^missing].');
+        expect(render(unresolved)).toContain('Text[^missing].');
     });
     test('leaves fenced, inline and indented code unchanged', () => {
         const code = '````md\n[x] [^n]\n```\n````\n\n~~~md\n[x] [^n]\n~~~\n\n    [x] [^n]\n\n`[x] [^n]` and `` `[x]` [^n] ``';
@@ -70,13 +86,19 @@ describe('selected conversation Markdown', () => {
         expect(result).toContain('| `[x] [^n]` | [x][oc-1-x] |');
         expect(result).toContain('> [x][oc-1-x] [^oc-1-n]');
     });
+    test('preserves closed fences with equivalent quote and list indentation', () => {
+        for (const source of ['> ```\n> code\n>```\n> after', '- item\n\n  ```\n  code\n\t```\n\n  after']) {
+            expect(format(message([source]))).toBe(`**助手**\n\n${source}`);
+        }
+        expect(render(format(message(['```\n> ```', '# next'])))).toContain('data-streamdown="heading-1"');
+    });
     for (const opening of ['```ts', '~~~~~js', '> ```ts', '- ```ts', '> - ~~~~js']) test(`closes unfinished ${opening} before later segments`, () => {
         const prefix = opening.startsWith('> -') ? '>   ' : opening.startsWith('>') ? '> ' : opening.startsWith('-') ? '  ' : '';
         const fence = opening === '~~~~~js' ? '~~~~~' : opening.includes('~') ? '~~~~' : '```';
         const result = format(message([`${opening}\n${prefix}const value = 1;`, '# next']), message(['final']));
         expect(result).toContain(`const value = 1;\n${prefix}${fence}\n\n\n# next`);
-        expect(marked.parse(result)).toContain('<h1>next</h1>');
-        expect(marked.parse(result)).toContain('<p>final</p>');
+        expect(render(result)).toContain('data-streamdown="heading-1"');
+        expect(render(result)).toContain('>final</p>');
     });
     test('preserves escaped syntax and inline destinations/titles', () => {
         const source = '\\[x] \\[^n] [label](https://example.com/[x] "[^n]")\n\n[x]: https://example.com "[x] [^n]"';

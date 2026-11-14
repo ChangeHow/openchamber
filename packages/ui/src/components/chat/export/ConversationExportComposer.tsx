@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { copyTextToClipboard } from '@/lib/clipboard';
-import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { ChatMessageEntry } from '../lib/turns/types';
-import { buildTurnImageExportSource, saveMessageImageExport } from '../message/imageExport';
+import { buildTurnImageExportSource, resolveMessageImageExportWidth } from '../message/imageExport';
 import { collectSelectedConversationMessages } from './selectedMessages';
 import { formatSelectedConversationMarkdown } from './selectionMarkdown';
 import { useConversationSelectionActive, useConversationSelectionStore } from './selectionContext';
@@ -22,7 +21,6 @@ const ExportToolbar: React.FC<{
 }> = ({ store, getMessages, columnRef }) => {
     const { t } = useI18n();
     const { isMobile } = useDeviceInfo();
-    const { vscode } = useRuntimeAPIs();
     const count = useStore(store, (state) => state.selected.size);
     const [busy, setBusy] = React.useState<'image' | 'markdown' | null>(null);
     const cancelRef = React.useRef<HTMLButtonElement>(null);
@@ -40,7 +38,7 @@ const ExportToolbar: React.FC<{
 
     const exportSelection = async (format: 'image' | 'markdown') => {
         if (busy) return;
-        const selected = store.getState().selected;
+        const { selected, saveImage } = store.getState();
         const messages = collectSelectedConversationMessages(getMessages(), selected);
         if (messages.length !== selected.size) {
             toast.error(t('chat.export.selectionUnavailable'));
@@ -57,13 +55,11 @@ const ExportToolbar: React.FC<{
                 const copied = await copyTextToClipboard(formatSelectedConversationMarkdown(messages, labels));
                 if (!copied.ok) throw new Error(copied.error);
                 toast.success(t('chat.messageBody.toast.copied'));
-            } else {
-                const root = columnRef.current?.querySelector<HTMLElement>('[data-chat-quote-root]');
+            } else if (saveImage) {
+                const width = resolveMessageImageExportWidth(columnRef.current?.querySelector<HTMLElement>('[data-chat-quote-root]') ?? columnRef.current);
                 const syntaxStyle = columnRef.current?.querySelector('[data-markdown-content]')?.getAttribute('style') ?? null;
-                const source = await buildTurnImageExportSource([formatSelectedConversationMarkdown(messages, labels)], syntaxStyle);
-                const exportWidth = Math.min(800, Math.max(360, root?.getBoundingClientRect().width ?? 720));
-                const result = await saveMessageImageExport(source, `conversation-${Date.now()}.png`, vscode, exportWidth);
-                if (result === 'saved') toast.success(t('chat.messageBody.toast.imageSaved'));
+                const source = await buildTurnImageExportSource(messages.map((message) => formatSelectedConversationMarkdown([message], labels)), syntaxStyle);
+                await saveImage(source, width);
             }
         } catch (error) {
             console.error('Conversation export failed:', error);

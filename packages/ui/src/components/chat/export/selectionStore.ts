@@ -3,7 +3,8 @@ import { createStore } from 'zustand/vanilla';
 type SelectionState = {
     active: boolean;
     selected: ReadonlySet<string>;
-    begin: (key: string) => void;
+    saveImage: ((source: HTMLElement, width: number) => Promise<void>) | null;
+    begin: (key: string, saveImage: (source: HTMLElement, width: number) => Promise<void>) => void;
     toggle: (key: string) => void;
     cancel: () => void;
 };
@@ -12,7 +13,8 @@ type SelectionState = {
 export const createConversationSelectionStore = () => createStore<SelectionState>((set) => ({
     active: false,
     selected: new Set(),
-    begin: (key) => set({ active: true, selected: new Set([key]) }),
+    saveImage: null,
+    begin: (key, saveImage) => set({ active: true, selected: new Set([key]), saveImage }),
     toggle: (key) => set((state) => {
         if (!state.active) return state;
         const selected = new Set(state.selected);
@@ -20,7 +22,7 @@ export const createConversationSelectionStore = () => createStore<SelectionState
         else selected.add(key);
         return { selected };
     }),
-    cancel: () => set({ active: false, selected: new Set() }),
+    cancel: () => set({ active: false, selected: new Set(), saveImage: null }),
 }));
 
 export type ConversationSelectionStore = ReturnType<typeof createConversationSelectionStore>;

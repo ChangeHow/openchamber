@@ -10,7 +10,8 @@ export const SaveImageMenu: React.FC<{
     disabled: boolean;
     selectionKey: string;
     onSave: (sourceElement?: HTMLElement | null) => Promise<void>;
-}> = ({ disabled, selectionKey, onSave }) => {
+    onSaveSelection: (source: HTMLElement, width: number) => Promise<void>;
+}> = ({ disabled, selectionKey, onSave, onSaveSelection }) => {
     const { t } = useI18n();
     const store = useConversationSelectionStore();
     const [saving, setSaving] = React.useState(false);
@@ -45,7 +46,7 @@ export const SaveImageMenu: React.FC<{
                     <Icon name="image-download" className="size-4" />
                     {t('chat.export.saveCurrent')}
                 </DropdownMenuItem>
-                {store ? <DropdownMenuItem className="typography-meta" onSelect={() => store.getState().begin(selectionKey)}>
+                {store ? <DropdownMenuItem className="typography-meta" onSelect={() => store.getState().begin(selectionKey, onSaveSelection)}>
                     <Icon name="check" className="size-4" />
                     {t('chat.export.selectMore')}
                 </DropdownMenuItem> : null}

@@ -1,16 +1,17 @@
 import { describe, expect, test } from 'bun:test';
 import { conversationSelectionKey, createConversationSelectionStore } from './selectionStore';
+const saveImage = async (_source: HTMLElement) => {};
 
 describe('conversation selection store', () => {
     test('starts inactive and begin selects exactly one message', () => {
         const store = createConversationSelectionStore();
         expect(store.getState().active).toBe(false);
         expect([...store.getState().selected]).toEqual([]);
-        store.getState().begin('user:first');
+        store.getState().begin('user:first', saveImage);
         expect(store.getState().active).toBe(true);
         expect([...store.getState().selected]).toEqual(['user:first']);
         store.getState().toggle('assistant:first');
-        store.getState().begin('user:second');
+        store.getState().begin('user:second', saveImage);
         expect([...store.getState().selected]).toEqual(['user:second']);
     });
 
@@ -19,7 +20,7 @@ describe('conversation selection store', () => {
         const initial = store.getState();
         store.getState().toggle('user:first');
         expect(store.getState()).toBe(initial);
-        store.getState().begin('user:first');
+        store.getState().begin('user:first', saveImage);
         store.getState().toggle('assistant:first');
         expect([...store.getState().selected]).toEqual(['user:first', 'assistant:first']);
         store.getState().toggle('user:first');
@@ -27,10 +28,11 @@ describe('conversation selection store', () => {
         store.getState().toggle('assistant:first');
         expect(store.getState().active).toBe(true);
         expect(store.getState().selected.size).toBe(0);
-        store.getState().begin('user:second');
+        store.getState().begin('user:second', saveImage);
         store.getState().cancel();
         expect(store.getState().active).toBe(false);
         expect(store.getState().selected.size).toBe(0);
+        expect(store.getState().saveImage).toBeNull();
         const cancelled = store.getState();
         store.getState().toggle('user:second');
         expect(store.getState()).toBe(cancelled);
@@ -39,9 +41,9 @@ describe('conversation selection store', () => {
     test('separate chat columns own independent stores', () => {
         const left = createConversationSelectionStore();
         const right = createConversationSelectionStore();
-        left.getState().begin('user:same');
+        left.getState().begin('user:same', saveImage);
         expect(right.getState().active).toBe(false);
-        right.getState().begin('assistant:same');
+        right.getState().begin('assistant:same', saveImage);
         left.getState().toggle('assistant:same');
         right.getState().cancel();
         expect([...left.getState().selected]).toEqual(['user:same', 'assistant:same']);

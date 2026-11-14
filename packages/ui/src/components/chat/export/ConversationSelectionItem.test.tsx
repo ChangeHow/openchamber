@@ -52,7 +52,7 @@ const item = (children: React.ReactNode = <p data-body>Message body</p>, eligibl
 
 const activeStore = () => {
     const store = createConversationSelectionStore();
-    store.getState().begin('user:one');
+    store.getState().begin('user:one', async () => {});
     return store;
 };
 
@@ -127,7 +127,7 @@ describe('ConversationSelectionItem', () => {
 
     test('virtualized slices of one assistant reply share one selection and restore it on remount', async () => {
         const store = createConversationSelectionStore();
-        store.getState().begin('user:one');
+        store.getState().begin('user:one', async () => {});
         const slices = (ids: number[]) => ids.map((id) => (
             <ConversationSelectionItem key={id} selectionKey="assistant:one" role="assistant" eligible>
                 <p data-slice={id}>Answer slice {id}</p>
@@ -245,7 +245,7 @@ describe('ConversationSelectionItem', () => {
         expect(container.querySelector('[inert]')).toBeNull();
         await act(async () => previous.getState().toggle('user:one'));
         expect(container.querySelector('[data-conversation-selection-item]')).toBeNull();
-        await act(async () => next.getState().begin('assistant:other'));
+        await act(async () => next.getState().begin('assistant:other', async () => {}));
         expect(element('[data-conversation-selection-item]').getAttribute('data-selected')).toBe('false');
         await act(async () => element('[data-conversation-selection-item]').click());
         expect([...next.getState().selected]).toEqual(['assistant:other', 'user:one']);
@@ -267,7 +267,7 @@ describe('ConversationSelectionItem', () => {
         const store = createConversationSelectionStore();
         const portal = document.createElement('div');
         document.body.append(portal);
-        await render(item(createPortal(<button data-portal onClick={() => { store.getState().begin('user:one'); }}>Select</button>, portal)), store);
+        await render(item(createPortal(<button data-portal onClick={() => { store.getState().begin('user:one', async () => {}); }}>Select</button>, portal)), store);
         await act(async () => element('[data-portal]', portal).click());
         expect(store.getState().active).toBe(true);
         expect([...store.getState().selected]).toEqual(['user:one']);
