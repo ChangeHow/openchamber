@@ -1,0 +1,22 @@
+version: 1
+kind: manual-agent-browser-checklist
+
+metadata:
+  id: collapsed-chat-table-width
+  title: Compare columns in a desktop chat table
+  owner: packages/ui
+  runner: ego-lite
+  interface: ego-browser
+
+fixture:
+  assistant_markdown: |
+    | Priority | CurrentProblemIdentifierThatHasNoSpacesAndIsTooLongForOneDesktopColumnAtTheChosenWidth | Suggested fix |
+    | --- | --- | --- |
+    | 1 | When the train is delayed, passengers still see the original platform and departure time until they reach the station. | Show the revised platform and departure time together so passengers can check their train before walking to the platform. |
+
+checks:
+  - Open the settled reply in Full width desktop chat with at least 1000 px available to the table. Turn cell wrap off.
+  - The short priority column keeps its natural width. Both long columns measure 420 px and all three are visible without scrolling.
+  - Select the identifier text with a DOM Range. Each rectangle from getClientRects() must stay inside its heading cell; the identifier spans multiple lines and never covers Suggested fix.
+  - Switch to Default chat width, expand the table, then collapse it. The long columns grow on expansion and return to 420 px on collapse.
+  - Open the same reply on the mobile surface in landscape with over 420 px available. With wrap off the long columns can exceed 420 px.

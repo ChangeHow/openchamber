@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { useUIStore } from '@/stores/useUIStore';
+import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { HoverTooltip } from '@/components/ui/row-tooltip';
 import { isRightToLeft, useI18n } from '@/lib/i18n';
 import { useMarkdownPresentation } from './MarkdownPresentationContext';
@@ -96,6 +97,7 @@ export function MarkdownTableCell({ node, style, ...props }: React.ComponentProp
 
 const MIN_COLUMN = 120;
 const WIDE_COLUMN = 280;
+const MAX_COLLAPSED_CHAT_COLUMN = 420;
 
 function fitColumns(natural: number[], available: number, wrap: boolean): number[] {
   const widths = natural.map((width) => Math.min(Math.max(MIN_COLUMN, available || 320), width));
@@ -248,9 +250,13 @@ export function MarkdownTable({ node, className, children, ...props }: React.Com
   );
   const isExpanded = expanded && canExpand;
   const expandedGeometry = isExpanded ? measured?.chat ?? null : null;
+  const available = measured?.available ?? 0;
+  const capCollapsedColumns = available > MAX_COLLAPSED_CHAT_COLUMN
+    && !wrap && chatTableExpansion && inMainChat && !isMobileSurfaceRuntime();
+  const collapsedBudget = capCollapsedColumns ? MAX_COLLAPSED_CHAT_COLUMN : available;
   const fitted = React.useMemo(() => (
-    measured ? fitColumns(measured.natural, expandedGeometry?.available ?? measured.available, wrap) : null
-  ), [measured, expandedGeometry, wrap]);
+    measured ? fitColumns(measured.natural, expandedGeometry?.available ?? collapsedBudget, wrap) : null
+  ), [measured, expandedGeometry, collapsedBudget, wrap]);
   const widths = React.useMemo(() => {
     const shown = dragged ? { ...userWidths, [dragged.column]: dragged.width } : userWidths;
     return fitted?.map((width, column) => shown[column] ?? width) ?? null;
@@ -277,12 +283,12 @@ export function MarkdownTable({ node, className, children, ...props }: React.Com
   }, [tableId, fitted, node, userWidths]);
   const collapsedLayout = React.useMemo(() => {
     if (!expandedGeometry || !measured) return null;
-    const collapsed = fitColumns(measured.natural, measured.available, wrap).map((width, column) => userWidths[column] ?? width);
+    const collapsed = fitColumns(measured.natural, collapsedBudget, wrap).map((width, column) => userWidths[column] ?? width);
     return {
       widths: collapsed.join(','),
       capped: collapsed.map((width, index) => (measured.natural[index] > width ? '1' : '0')).join(''),
     };
-  }, [expandedGeometry, measured, wrap, userWidths]);
+  }, [expandedGeometry, measured, collapsedBudget, wrap, userWidths]);
   const columns = widths?.map((width, index) => (
     <col key={index} style={{ width }} />
   ));
@@ -344,6 +350,7 @@ export function MarkdownTable({ node, className, children, ...props }: React.Com
       dir={props.dir ?? 'ltr'}
       data-streamdown="table-wrapper"
       data-table-wrap={wrap ? 'true' : 'false'}
+      data-collapsed-column-cap={capCollapsedColumns ? MAX_COLLAPSED_CHAT_COLUMN : undefined}
       data-table-expanded={isExpanded ? 'true' : undefined}
       className="group flex flex-col"
       style={wrapperStyle}

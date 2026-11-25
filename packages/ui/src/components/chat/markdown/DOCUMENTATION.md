@@ -96,6 +96,10 @@ Highlights runs on the main thread so synchronous consumers can paint highlighte
 
 Persisted table widths use headings for identity because inserting a preceding table changes ordinal positions.
 
+### Why collapsed desktop chat columns stop at 420 px
+
+With cell wrap off, a long column can fill the entire message and hide the column a reader wants to compare it with. Desktop chat caps automatic column widths at 420 px until the table is expanded. Short columns keep their natural width, and phone tables keep their existing sizing.
+
 ### Why table expansion widens the scroller and not the Markdown root
 
 The expanded scroller can use the transcript's spare width without changing the message column's measure. Its toolbar stays anchored to that column, and the prose and other tables keep their existing layout. A right-to-left table's frame grows leftward from its own start edge, so its offset is measured from that edge; a direction change remeasures, because no size an observer sees changes with it.
